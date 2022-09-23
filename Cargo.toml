@@ -1,0 +1,18 @@
+[package]
+name = "lumi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+members = ["lumi-macro"]
+
+[dependencies]
+lumi-macro = { path = "lumi-macro", version = "0.1" }
+
+bytemuck = "1.12"
+naga = "0.9"
+thiserror = "1.0"
+wgpu = "0.13"
+uuid = { version = "1.1", features = ["v4"] }
