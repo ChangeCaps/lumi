@@ -8,11 +8,25 @@ edition = "2021"
 [workspace]
 members = ["lumi-macro"]
 
+[dev-dependencies]
+futures-lite = "1.12"
+winit = "0.27"
+
 [dependencies]
 lumi-macro = { path = "lumi-macro", version = "0.1" }
 
-bytemuck = "1.12"
-naga = "0.9"
+anyhow = "1.0"
+bytemuck = { version = "1.12", features = ["derive"] }
+encase = { version = "0.3", features = ["glam"] }
+glam = { version = "0.21", features = ["bytemuck"] }
+image = { version = "0.24", optional = true }
+mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
+naga = { version = "0.9", features = ["wgsl-out"] }
+once_cell = "1.15"
 thiserror = "1.0"
 wgpu = "0.13"
 uuid = { version = "1.1", features = ["v4"] }
+
+[features]
+default = ["image"]
+image = ["dep:image"]

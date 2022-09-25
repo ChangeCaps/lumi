@@ -1,12 +1,19 @@
 use std::{
+    any::Any,
     borrow::Cow,
     collections::LinkedList,
     num::{NonZeroU32, NonZeroU64},
 };
 
-use wgpu::{BindingResource, BindingType, BufferBinding, BufferBindingType, ShaderStages};
+use encase::{internal::WriteInto, ShaderType};
+use once_cell::sync::OnceCell;
+use wgpu::{
+    BindingResource, BindingType, BufferBinding, BufferBindingType, BufferUsages,
+    SamplerBindingType, ShaderStages, StorageTextureAccess, TextureFormat, TextureSampleType,
+    TextureViewDimension,
+};
 
-use crate::{SharedBuffer, SharedDevice};
+use crate::{SharedBuffer, SharedDevice, SharedQueue, SharedSampler, SharedTextureView};
 
 pub use lumi_macro::Bind;
 
@@ -20,6 +27,8 @@ pub struct SharedBufferBinding {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SharedBindingResource {
     Buffer(SharedBufferBinding),
+    TextureView(SharedTextureView),
+    Sampler(SharedSampler),
 }
 
 impl SharedBindingResource {
@@ -30,6 +39,8 @@ impl SharedBindingResource {
                 offset: buffer.offset,
                 size: buffer.size,
             }),
+            Self::TextureView(view) => BindingResource::TextureView(view.view()),
+            Self::Sampler(sampler) => BindingResource::Sampler(sampler.sampler()),
         }
     }
 }
@@ -37,27 +48,10 @@ impl SharedBindingResource {
 #[derive(Clone, Debug)]
 pub struct BindingLayoutEntry {
     pub name: Cow<'static, str>,
-    pub group: u32,
+    pub state: fn() -> Box<dyn Any>,
     pub visibility: ShaderStages,
     pub ty: BindingType,
     pub count: Option<NonZeroU32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct SharedBinding {
-    pub name: Cow<'static, str>,
-    pub resource: SharedBindingResource,
-    pub group: u32,
-}
-
-pub trait AsBinding {
-    fn entry(name: Cow<'static, str>, group: u32) -> BindingLayoutEntry;
-    fn as_binding(
-        &self,
-        device: &SharedDevice,
-        name: Cow<'static, str>,
-        group: u32,
-    ) -> SharedBinding;
 }
 
 pub trait Bind {
@@ -65,15 +59,72 @@ pub trait Bind {
     where
         Self: Sized;
 
-    fn bindings(&self, device: &SharedDevice) -> Vec<SharedBinding>;
+    fn get_uniform(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        name: &str,
+        state: &mut dyn Any,
+    ) -> Option<SharedBindingResource>;
+
+    fn get_storage(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        name: &str,
+        state: &mut dyn Any,
+    ) -> Option<SharedBindingResource>;
+
+    fn get_texture(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        name: &str,
+        state: &mut dyn Any,
+    ) -> Option<SharedBindingResource>;
+
+    fn get_storage_texture(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        name: &str,
+        state: &mut dyn Any,
+    ) -> Option<SharedBindingResource>;
+
+    fn get_sampler(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        name: &str,
+        state: &mut dyn Any,
+    ) -> Option<SharedBindingResource>;
 }
 
-impl AsBinding for SharedBufferBinding {
-    fn entry(name: Cow<'static, str>, group: u32) -> BindingLayoutEntry {
+pub struct BindLayoutEntry {
+    pub ty: BindingType,
+    pub count: Option<NonZeroU32>,
+}
+
+impl BindLayoutEntry {
+    pub fn into_layout_entry<T: Any + Default>(
+        self,
+        name: impl Into<Cow<'static, str>>,
+    ) -> BindingLayoutEntry {
         BindingLayoutEntry {
-            name,
-            group,
+            name: name.into(),
+            state: || Box::new(T::default()),
             visibility: ShaderStages::all(),
+            ty: self.ty,
+            count: self.count,
+        }
+    }
+}
+
+pub trait UniformBinding {
+    type State: Any + Default;
+
+    fn entry() -> BindLayoutEntry {
+        BindLayoutEntry {
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -83,16 +134,226 @@ impl AsBinding for SharedBufferBinding {
         }
     }
 
-    fn as_binding(
+    fn binding(
         &self,
-        _device: &SharedDevice,
-        name: Cow<'static, str>,
-        group: u32,
-    ) -> SharedBinding {
-        SharedBinding {
-            name,
-            resource: SharedBindingResource::Buffer(self.clone()),
-            group,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource;
+}
+
+pub trait StorageBinding {
+    type State: Any + Default;
+
+    fn entry() -> BindLayoutEntry {
+        BindLayoutEntry {
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }
+    }
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource;
+}
+
+pub trait TextureBinding {
+    type State: Any + Default;
+
+    fn entry() -> BindLayoutEntry {
+        BindLayoutEntry {
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Float { filterable: true },
+                view_dimension: TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        }
+    }
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource;
+}
+
+pub trait StorageTextureBinding {
+    type State: Any + Default;
+
+    fn entry() -> BindLayoutEntry {
+        BindLayoutEntry {
+            ty: BindingType::StorageTexture {
+                access: StorageTextureAccess::ReadOnly,
+                format: TextureFormat::Rgba8UnormSrgb,
+                view_dimension: TextureViewDimension::D2,
+            },
+            count: None,
+        }
+    }
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource;
+}
+
+pub trait SamplerBinding {
+    type State: Any + Default;
+
+    fn entry() -> BindLayoutEntry {
+        BindLayoutEntry {
+            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+            count: None,
+        }
+    }
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource;
+}
+
+pub struct DefaultBindingState<T, U> {
+    pub state: T,
+    pub default_binding: OnceCell<U>,
+}
+
+impl<T: Default, U> Default for DefaultBindingState<T, U> {
+    fn default() -> Self {
+        Self {
+            state: T::default(),
+            default_binding: OnceCell::new(),
+        }
+    }
+}
+
+pub trait DefaultTexture {
+    fn default_texture(device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView;
+}
+
+impl<T: TextureBinding + DefaultTexture> TextureBinding for Option<T> {
+    type State = DefaultBindingState<T::State, SharedTextureView>;
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        match self {
+            Some(texture) => texture.binding(device, queue, &mut state.state),
+            None => {
+                let view = state
+                    .default_binding
+                    .get_or_init(|| T::default_texture(device, queue));
+
+                SharedBindingResource::TextureView(view.clone())
+            }
+        }
+    }
+}
+
+pub trait DefaultSampler {
+    fn default_sampler(device: &SharedDevice, queue: &SharedQueue) -> SharedSampler;
+}
+
+impl<T: SamplerBinding + DefaultSampler> SamplerBinding for Option<T> {
+    type State = DefaultBindingState<T::State, SharedSampler>;
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        match self {
+            Some(texture) => texture.binding(device, queue, &mut state.state),
+            None => {
+                let sampler = state
+                    .default_binding
+                    .get_or_init(|| T::default_sampler(device, queue));
+
+                SharedBindingResource::Sampler(sampler.clone())
+            }
+        }
+    }
+}
+
+impl<T: ShaderType + WriteInto> UniformBinding for T {
+    type State = Option<SharedBuffer>;
+
+    fn entry() -> BindLayoutEntry {
+        BindLayoutEntry {
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }
+    }
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        let mut data = encase::UniformBuffer::new(Vec::<u8>::new());
+        data.write(self).unwrap();
+        let data = data.into_inner();
+
+        if let Some(buffer) = state {
+            if buffer.size() < data.len() as u64 {
+                let buffer = device.create_shared_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: None,
+                    contents: &data,
+                    usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+                });
+
+                *state = Some(buffer.clone());
+
+                SharedBindingResource::Buffer(SharedBufferBinding {
+                    buffer,
+                    offset: 0,
+                    size: None,
+                })
+            } else {
+                queue.write_buffer(buffer.buffer(), 0, &data);
+
+                SharedBindingResource::Buffer(SharedBufferBinding {
+                    buffer: buffer.clone(),
+                    offset: 0,
+                    size: None,
+                })
+            }
+        } else {
+            let buffer = device.create_shared_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: &data,
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+
+            *state = Some(buffer.clone());
+
+            SharedBindingResource::Buffer(SharedBufferBinding {
+                buffer,
+                offset: 0,
+                size: None,
+            })
         }
     }
 }

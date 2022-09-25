@@ -6,6 +6,12 @@ macro_rules! ids {
                 uuid: ::uuid::Uuid,
             }
 
+            impl Default for $ident {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+
             impl $ident {
                 pub fn new() -> Self {
                     Self {
@@ -29,7 +35,8 @@ ids! {
     pub struct TextureViewId;
     pub struct SamplerId;
     pub struct ShaderId;
-    pub struct PipelineLayoutId;
-    pub struct RenderPipelineId;
-    pub struct ComputePipelineId;
+    pub struct MeshId;
+    pub struct NodeId;
+    pub struct LightId;
+    pub struct CameraId;
 }

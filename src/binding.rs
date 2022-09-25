@@ -1,18 +1,29 @@
 use std::{
+    any::Any,
     borrow::Cow,
     collections::{HashMap, LinkedList},
 };
 
-use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry};
+use wgpu::{
+    BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    BufferBindingType,
+};
 
-use crate::{Bind, BindingLayoutEntry, SharedBindingResource, SharedDevice};
+use crate::{Bind, BindingLayoutEntry, Shader, SharedBindingResource, SharedDevice, SharedQueue};
 
-pub struct BindingsBuilder {
-    entries: LinkedList<BindingLayoutEntry>,
-    bindings: HashMap<Cow<'static, str>, u32>,
+#[derive(Debug)]
+pub struct BindingLocation {
+    pub binding: u32,
+    pub group: u32,
 }
 
-impl BindingsBuilder {
+#[derive(Debug)]
+pub struct BindingsLayout {
+    entries: LinkedList<BindingLayoutEntry>,
+    bindings: HashMap<Cow<'static, str>, BindingLocation>,
+}
+
+impl BindingsLayout {
     pub fn new() -> Self {
         Self {
             entries: LinkedList::new(),
@@ -20,42 +31,29 @@ impl BindingsBuilder {
         }
     }
 
-    pub fn from_shader(module: &naga::Module) -> Self {
-        let mut this = Self::new();
-
-        for (_, variable) in module.global_variables.iter() {
+    pub fn with_shader(mut self, shader: &Shader) -> Self {
+        for (_, variable) in shader.module().global_variables.iter() {
             if let Some(ref name) = variable.name {
                 if let Some(ref binding) = variable.binding {
-                    this.add_binding(name.clone(), binding.binding);
+                    let binding = BindingLocation {
+                        binding: binding.binding,
+                        group: binding.group,
+                    };
+
+                    self.add_binding(name.clone(), binding);
                 }
             }
         }
 
-        this
+        self
     }
 
-    pub fn add_binding(&mut self, name: impl Into<Cow<'static, str>>, binding: u32) {
+    pub fn add_binding(&mut self, name: impl Into<Cow<'static, str>>, binding: BindingLocation) {
         self.bindings.insert(name.into(), binding);
     }
 
-    pub fn with_binding(mut self, name: impl Into<Cow<'static, str>>, binding: u32) -> Self {
-        self.add_binding(name, binding);
-        self
-    }
-
-    pub fn with_bindings<T, I>(mut self, bindings: I) -> Self
-    where
-        T: Into<Cow<'static, str>>,
-        I: Iterator<Item = (T, u32)>,
-    {
-        let bindings = bindings.map(|(name, binding)| (name.into(), binding));
-        self.bindings.extend(bindings);
-        self
-    }
-
-    pub fn bind<T: Bind>(mut self) -> Self {
-        self.entries.append(&mut T::entries());
-        self
+    pub fn bind<T: Bind>(self) -> Self {
+        self.append(T::entries())
     }
 
     pub fn push(mut self, entry: BindingLayoutEntry) -> Self {
@@ -63,62 +61,68 @@ impl BindingsBuilder {
         self
     }
 
-    pub fn append(mut self, mut entries: LinkedList<BindingLayoutEntry>) -> Self {
-        self.entries.append(&mut entries);
+    pub fn append(mut self, entries: LinkedList<BindingLayoutEntry>) -> Self {
+        for entry in entries {
+            if self.bindings.contains_key(&entry.name) {
+                self.entries.push_back(entry);
+            }
+        }
         self
     }
 
-    pub fn build(self, device: &SharedDevice) -> Bindings {
-        #[derive(Default)]
-        struct Group {
-            bindings: HashMap<Cow<'static, str>, BindingGroupEntry>,
-            entries: Vec<BindGroupLayoutEntry>,
-        }
+    pub fn create_bind_group_layouts(&self, device: &SharedDevice) -> Vec<BindGroupLayout> {
+        let mut entries: Vec<Vec<BindGroupLayoutEntry>> = Vec::new();
 
-        let mut groups: Vec<Group> = Vec::new();
+        for entry in self.entries.iter() {
+            let binding = self.bindings.get(&entry.name).unwrap();
 
-        for entry in self.entries {
-            while groups.len() <= entry.group as usize {
-                groups.push(Group::default());
+            while entries.len() <= binding.group as usize {
+                entries.push(Vec::new());
             }
 
-            let group = &mut groups[entry.group as usize];
-
-            let binding = self
-                .bindings
-                .get(&entry.name)
-                .copied()
-                .unwrap_or_else(|| group.bindings.len() as u32);
-
-            group
-                .bindings
-                .insert(entry.name, BindingGroupEntry::new(binding));
+            let entries = &mut entries[binding.group as usize];
 
             let entry = BindGroupLayoutEntry {
-                binding: entry.group,
+                binding: binding.binding,
                 visibility: entry.visibility,
                 ty: entry.ty,
                 count: entry.count,
             };
 
-            group.entries.push(entry);
+            entries.push(entry);
         }
 
-        let groups = groups
+        entries
             .into_iter()
-            .map(|group| {
-                let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            .map(|entries| {
+                device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: None,
-                    entries: &group.entries,
-                });
+                    entries: &entries,
+                })
+            })
+            .collect()
+    }
 
-                BindingGroup {
-                    bindings: group.bindings,
-                    layout,
-                    bind_group: None,
-                }
+    pub fn create_bindings(&self, device: &SharedDevice) -> Bindings {
+        let mut groups: Vec<BindingGroup> = self
+            .create_bind_group_layouts(device)
+            .into_iter()
+            .map(|layout| BindingGroup {
+                bindings: HashMap::new(),
+                layout,
+                bind_group: None,
             })
             .collect();
+
+        for entry in self.entries.iter() {
+            let binding = self.bindings.get(&entry.name).unwrap();
+
+            let group_entry = BindingGroupEntry::new(binding.binding, (entry.state)());
+
+            let group = &mut groups[binding.group as usize];
+            let key = BindingGroupKey::new(entry.name.clone(), entry.ty);
+            group.bindings.insert(key, group_entry);
+        }
 
         Bindings { groups }
     }
@@ -127,19 +131,56 @@ impl BindingsBuilder {
 struct BindingGroupEntry {
     resource: Option<SharedBindingResource>,
     binding: u32,
+    state: Box<dyn Any>,
 }
 
 impl BindingGroupEntry {
-    pub const fn new(binding: u32) -> Self {
+    pub const fn new(binding: u32, state: Box<dyn Any>) -> Self {
         Self {
             resource: None,
             binding,
+            state,
         }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum BindingKind {
+    UniformBuffer,
+    StorageBuffer,
+    Texture,
+    StorageTexture,
+    Sampler,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct BindingGroupKey {
+    kind: BindingKind,
+    name: Cow<'static, str>,
+}
+
+impl BindingGroupKey {
+    const fn new(name: Cow<'static, str>, ty: BindingType) -> Self {
+        let kind = match ty {
+            BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                ..
+            } => BindingKind::UniformBuffer,
+            BindingType::Buffer {
+                ty: BufferBindingType::Storage { .. },
+                ..
+            } => BindingKind::StorageBuffer,
+            BindingType::Texture { .. } => BindingKind::Texture,
+            BindingType::StorageTexture { .. } => BindingKind::StorageTexture,
+            BindingType::Sampler { .. } => BindingKind::Sampler,
+        };
+
+        Self { name, kind }
+    }
+}
+
 struct BindingGroup {
-    bindings: HashMap<Cow<'static, str>, BindingGroupEntry>,
+    bindings: HashMap<BindingGroupKey, BindingGroupEntry>,
     layout: BindGroupLayout,
     bind_group: Option<BindGroup>,
 }
@@ -153,7 +194,7 @@ impl BindingGroup {
             let resource = entry
                 .resource
                 .as_ref()
-                .unwrap_or_else(|| panic!("Binding '{}' not bound", name));
+                .unwrap_or_else(|| panic!("Binding '{}' not bound", name.name));
 
             let entry = wgpu::BindGroupEntry {
                 binding: entry.binding,
@@ -176,8 +217,8 @@ pub struct Bindings {
 }
 
 impl Bindings {
-    pub fn build() -> BindingsBuilder {
-        BindingsBuilder::new()
+    pub fn new(device: &SharedDevice, layout: &BindingsLayout) -> Self {
+        layout.create_bindings(device)
     }
 
     pub fn layouts(&self) -> Vec<&BindGroupLayout> {
@@ -185,26 +226,45 @@ impl Bindings {
     }
 
     #[track_caller]
-    pub fn bind(&mut self, device: &SharedDevice, bind: &impl Bind) {
-        for binding in bind.bindings(device) {
-            let group = &mut self.groups[binding.group as usize];
+    pub fn bind<T>(&mut self, device: &SharedDevice, queue: &SharedQueue, bind: &T)
+    where
+        T: Bind + ?Sized,
+    {
+        for group in self.groups.iter_mut() {
+            for (key, entry) in group.bindings.iter_mut() {
+                let resource = match key.kind {
+                    BindingKind::UniformBuffer => {
+                        bind.get_uniform(device, queue, key.name.as_ref(), entry.state.as_mut())
+                    }
+                    BindingKind::StorageBuffer => {
+                        bind.get_storage(device, queue, key.name.as_ref(), entry.state.as_mut())
+                    }
+                    BindingKind::Texture => {
+                        bind.get_texture(device, queue, key.name.as_ref(), entry.state.as_mut())
+                    }
+                    BindingKind::StorageTexture => bind.get_storage_texture(
+                        device,
+                        queue,
+                        key.name.as_ref(),
+                        entry.state.as_mut(),
+                    ),
+                    BindingKind::Sampler => {
+                        bind.get_sampler(device, queue, key.name.as_ref(), entry.state.as_mut())
+                    }
+                };
 
-            if let Some(entry) = group.bindings.get_mut(&binding.name) {
-                let resource = Some(binding.resource);
+                if resource.is_some() {
+                    if entry.resource != resource {
+                        group.bind_group = None;
+                    }
 
-                if entry.resource != resource {
                     entry.resource = resource;
-
-                    // invalidate bind group
-                    group.bind_group = None;
                 }
-            } else {
-                panic!("Binding '{}' doesn't exist in layout", binding.name);
             }
         }
     }
 
-    pub fn update_bind_group(&mut self, device: &SharedDevice) {
+    pub fn update_bind_groups(&mut self, device: &SharedDevice) {
         for group in self.groups.iter_mut() {
             if group.bind_group.is_none() {
                 group.bind_group = Some(group.create_bind_group(device));
@@ -213,10 +273,9 @@ impl Bindings {
     }
 
     #[track_caller]
-    pub fn bind_groups(&self) -> Vec<&BindGroup> {
+    pub fn bind_groups(&self) -> impl Iterator<Item = &BindGroup> {
         self.groups
             .iter()
             .map(|g| g.bind_group.as_ref().expect("BindGroup not created"))
-            .collect()
     }
 }

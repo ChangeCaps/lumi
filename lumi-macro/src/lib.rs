@@ -16,7 +16,10 @@ fn get_lumi() -> syn::Path {
     }
 }
 
-#[proc_macro_derive(Bind, attributes(group))]
+#[proc_macro_derive(
+    Bind,
+    attributes(uniform, storage_buffer, texture, storage_texture, sampler)
+)]
 pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     bind::derive_bind(input)
 }
