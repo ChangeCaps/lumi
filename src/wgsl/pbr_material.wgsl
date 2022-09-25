@@ -32,7 +32,7 @@ var normal_map: texture_2d<f32>;
 var normal_map_sampler: sampler;
 
 @group(1) @binding(11)
-var emissive_texture: texture_2d<f32>;
+var emissive_map: texture_2d<f32>;
 
 @group(1) @binding(12)
-var emissive_sampler: sampler;
+var emissive_map_sampler: sampler;

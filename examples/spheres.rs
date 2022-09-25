@@ -11,14 +11,17 @@ fn main() {
 
     let cube = world.add_node(Node::new(
         PbrMaterial {
-            base_color_texture: Some(image),
+            base_color_texture: Some(image.clone()),
             normal_map: Some(normal),
+            emissive_map: Some(image),
+            emissive: Vec3::new(1.0, 1.0, 1.0) * 2.0,
             ..Default::default()
         },
         shape::cube(1.0, 1.0, 1.0),
     ));
     world.add_light(DirectionalLight {
         direction: Vec3::new(-1.0, -1.0, -1.0),
+        intensity: 2.0,
         ..Default::default()
     });
     world.add_light(PointLight {

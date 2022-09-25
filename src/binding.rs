@@ -6,7 +6,7 @@ use std::{
 
 use wgpu::{
     BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BufferBindingType,
+    BufferBindingType, RenderPass,
 };
 
 use crate::{Bind, BindingLayoutEntry, Shader, SharedBindingResource, SharedDevice, SharedQueue};
@@ -277,5 +277,11 @@ impl Bindings {
         self.groups
             .iter()
             .map(|g| g.bind_group.as_ref().expect("BindGroup not created"))
+    }
+
+    pub fn bind_pass<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
+        for (i, group) in self.bind_groups().enumerate() {
+            render_pass.set_bind_group(i as u32, group, &[]);
+        }
     }
 }

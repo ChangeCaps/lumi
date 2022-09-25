@@ -1,6 +1,6 @@
 use glam::{Vec3, Vec4};
 
-use crate::{Bind, EmissiveMap, Image, Material, NormalMap};
+use crate::{Bind, Image, Material, NormalMap};
 
 #[derive(Clone, Debug, Bind)]
 pub struct PbrMaterial {
@@ -14,8 +14,8 @@ pub struct PbrMaterial {
     #[sampler(name = "normal_map_sampler")]
     pub normal_map: Option<NormalMap>,
     #[texture]
-    #[sampler(name = "emissive_sampler")]
-    pub emissive_map: Option<EmissiveMap>,
+    #[sampler(name = "emissive_map_sampler")]
+    pub emissive_map: Option<Image>,
     #[uniform]
     pub base_color: Vec4,
     #[uniform]

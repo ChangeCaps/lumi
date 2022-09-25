@@ -2,6 +2,7 @@
 
 mod bind;
 mod binding;
+mod bloom;
 mod buffer;
 mod camera;
 mod device;
@@ -27,6 +28,7 @@ mod world;
 pub use self::image::*;
 pub use bind::*;
 pub use binding::*;
+pub use bloom::*;
 pub use buffer::*;
 pub use camera::*;
 pub use device::*;

@@ -2,8 +2,8 @@ use std::{ops::Deref, sync::Arc};
 
 use once_cell::sync::OnceCell;
 use wgpu::{
-    Extent3d, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    Extent3d, FilterMode, SamplerDescriptor, TextureAspect, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 
 use crate::{
@@ -236,7 +236,13 @@ impl SamplerBinding for SharedTextureView {
         _queue: &SharedQueue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
-        let sampler = state.get_or_init(|| device.create_shared_sampler(&Default::default()));
+        let sampler = state.get_or_init(|| {
+            device.create_shared_sampler(&SamplerDescriptor {
+                mag_filter: FilterMode::Linear,
+                min_filter: FilterMode::Linear,
+                ..Default::default()
+            })
+        });
 
         SharedBindingResource::Sampler(sampler.clone())
     }

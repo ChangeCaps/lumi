@@ -20,6 +20,7 @@ struct PbrInput {
 	metallic: f32,
 	roughness: f32,
 	reflectance: f32,
+	emissive: vec3<f32>,
 }
 
 fn new_pbr(mesh: Mesh) -> PbrInput {
@@ -41,6 +42,7 @@ fn new_pbr(mesh: Mesh) -> PbrInput {
 	input.metallic = 0.01;
 	input.roughness = 0.089;
 	input.reflectance = 0.5;
+	input.emissive = vec3<f32>(0.0);
 
 	return input;
 }
@@ -83,7 +85,7 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 	let ambient_light = ambient_diffuse + ambient_specular;
 	light += ambient_light * 0.1;
 
-	var color = base_color.rgb * light;
+	var color = base_color.rgb * light + input.emissive;
 
 	return vec4<f32>(color, 1.0);
 }

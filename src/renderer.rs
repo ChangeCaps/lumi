@@ -11,8 +11,8 @@ use wgpu::{
 };
 
 use crate::{
-    Bindings, BindingsLayout, CameraId, DynMaterial, FrameBuffer, LightBindings, Mesh, MeshId,
-    NodeId, RawCamera, Shader, ShaderProcessor, SharedBuffer, SharedDevice, SharedQueue,
+    Bindings, BindingsLayout, Bloom, CameraId, DynMaterial, FrameBuffer, LightBindings, Mesh,
+    MeshId, NodeId, RawCamera, Shader, ShaderProcessor, SharedBuffer, SharedDevice, SharedQueue,
     ToneMapping, UniformBuffer, World,
 };
 
@@ -43,6 +43,10 @@ struct MeshBindings<'a> {
 pub struct RenderSettings {
     pub clear_color: [f32; 4],
     pub aspect_ratio: Option<f32>,
+    pub bloom_enabled: bool,
+    pub bloom_threshold: f32,
+    pub bloom_knee: f32,
+    pub bloom_scale: f32,
 }
 
 impl Default for RenderSettings {
@@ -50,6 +54,10 @@ impl Default for RenderSettings {
         Self {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             aspect_ratio: None,
+            bloom_enabled: true,
+            bloom_threshold: 1.5,
+            bloom_knee: 0.5,
+            bloom_scale: 1.0,
         }
     }
 }
@@ -64,6 +72,7 @@ pub struct Renderer {
     light_bindings: LightBindings,
     bindings: HashMap<NodeId, Bindings>,
     frame_buffer: FrameBuffer,
+    bloom: Bloom,
     tone_mapping: ToneMapping,
     shader_processor: ShaderProcessor,
 }
@@ -72,6 +81,7 @@ impl Renderer {
     pub fn new(device: SharedDevice, queue: SharedQueue) -> Self {
         let frame_buffer = FrameBuffer::new(&device, 1, 1, 4);
         let mut shader_processor = ShaderProcessor::default();
+        let bloom = Bloom::new(&device, &mut shader_processor, 1, 1);
         let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
         Self {
@@ -84,6 +94,7 @@ impl Renderer {
             light_bindings: LightBindings::default(),
             bindings: HashMap::new(),
             frame_buffer,
+            bloom,
             tone_mapping,
             shader_processor,
         }
@@ -91,6 +102,7 @@ impl Renderer {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.frame_buffer.resize(&self.device, width, height);
+        self.bloom.resize(&self.device, width, height);
     }
 
     pub fn set_sample_count(&mut self, sample_count: u32) {
@@ -387,6 +399,19 @@ impl Renderer {
         drop(hdr_pass);
 
         let target_view = target.create_view(&Default::default());
+
+        if self.settings.bloom_enabled {
+            self.bloom.render(
+                &self.device,
+                &self.queue,
+                &mut encoder,
+                &self.frame_buffer.hdr_view,
+                self.settings.bloom_threshold,
+                self.settings.bloom_knee,
+                self.settings.bloom_scale,
+            );
+        }
+
         self.tone_mapping.run(
             &self.device,
             &self.queue,
