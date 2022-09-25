@@ -4,10 +4,13 @@ pub mod shape;
 use std::{collections::HashMap, sync::Arc};
 
 pub use attribute::*;
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 
 use crate::MeshId;
 
+/// A mesh is a collection of vertices and indices.
+///
+/// **Note** data is cloned on write.
 #[derive(Clone, Debug, Default)]
 pub struct Mesh {
     attributes: HashMap<String, Arc<MeshAttribute>>,
@@ -21,6 +24,7 @@ impl Mesh {
     pub const TANGENT: &'static str = "tangent";
     pub const UV_0: &'static str = "uv_0";
 
+    /// Creates a new mesh.
     pub fn new() -> Self {
         Self {
             attributes: HashMap::new(),
@@ -29,10 +33,12 @@ impl Mesh {
         }
     }
 
+    /// Returns the mesh id.
     pub fn id(&self) -> MeshId {
         self.id
     }
 
+    /// Inserts a new attribute.
     pub fn insert_attribute(
         &mut self,
         name: impl Into<String>,
@@ -44,6 +50,7 @@ impl Mesh {
             .insert(name.into(), Arc::new(attribute.into()));
     }
 
+    /// Removes an attribute.
     pub fn remove_attribute<T: From<MeshAttribute>>(&mut self, name: impl AsRef<str>) -> Option<T> {
         self.id = MeshId::new();
 
@@ -160,6 +167,78 @@ impl Mesh {
         self.insert_attribute(Self::TANGENT, tangents);
 
         mikktspace::generate_tangents(self)
+    }
+}
+
+impl Mesh {
+    pub fn insert_positions(&mut self, positions: impl Into<Vec<Vec3>>) {
+        self.insert_attribute(Self::POSITION, positions.into());
+    }
+
+    pub fn remove_positions(&mut self) -> Option<Vec<Vec3>> {
+        self.remove_attribute(Self::POSITION)
+    }
+
+    pub fn positions(&self) -> Option<&[Vec3]> {
+        self.attribute(Self::POSITION)
+    }
+
+    pub fn positions_mut(&mut self) -> Option<&mut [Vec3]> {
+        self.attribute_mut(Self::POSITION)
+    }
+}
+
+impl Mesh {
+    pub fn insert_normals(&mut self, normals: impl Into<Vec<Vec3>>) {
+        self.insert_attribute(Self::NORMAL, normals.into());
+    }
+
+    pub fn remove_normals(&mut self) -> Option<Vec<Vec3>> {
+        self.remove_attribute(Self::NORMAL)
+    }
+
+    pub fn normals(&self) -> Option<&[Vec3]> {
+        self.attribute(Self::NORMAL)
+    }
+
+    pub fn normals_mut(&mut self) -> Option<&mut [Vec3]> {
+        self.attribute_mut(Self::NORMAL)
+    }
+}
+
+impl Mesh {
+    pub fn insert_tangents(&mut self, tangents: impl Into<Vec<[f32; 4]>>) {
+        self.insert_attribute(Self::TANGENT, tangents.into());
+    }
+
+    pub fn remove_tangents(&mut self) -> Option<Vec<[f32; 4]>> {
+        self.remove_attribute(Self::TANGENT)
+    }
+
+    pub fn tangents(&self) -> Option<&[[f32; 4]]> {
+        self.attribute(Self::TANGENT)
+    }
+
+    pub fn tangents_mut(&mut self) -> Option<&mut [[f32; 4]]> {
+        self.attribute_mut(Self::TANGENT)
+    }
+}
+
+impl Mesh {
+    pub fn insert_uv0(&mut self, uvs: impl Into<Vec<Vec2>>) {
+        self.insert_attribute(Self::UV_0, uvs.into());
+    }
+
+    pub fn remove_uv0(&mut self) -> Option<Vec<Vec2>> {
+        self.remove_attribute(Self::UV_0)
+    }
+
+    pub fn uv_0(&self) -> Option<&[Vec2]> {
+        self.attribute(Self::UV_0)
+    }
+
+    pub fn uv_0_mut(&mut self) -> Option<&mut [Vec2]> {
+        self.attribute_mut(Self::UV_0)
     }
 }
 

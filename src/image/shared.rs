@@ -7,6 +7,7 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
+use wgpu::TextureFormat;
 
 use crate::{
     DefaultSampler, DefaultTexture, ImageData, SamplerBinding, SharedBindingResource, SharedDevice,
@@ -46,6 +47,15 @@ impl Image {
         }
     }
 
+    pub fn render_target(width: u32, height: u32) -> Self {
+        Self::new(ImageData::with_format(
+            width,
+            height,
+            Vec::new(),
+            TextureFormat::Bgra8UnormSrgb,
+        ))
+    }
+
     pub fn load_from_file(path: &str) -> Result<Self, image::ImageError> {
         let image = ImageData::load_from_file(path)?;
         Ok(Self::new(image))
@@ -59,6 +69,19 @@ impl Image {
         let inner = Arc::make_mut(&mut self.inner);
         *inner.write.get_mut() = true;
         &mut inner.image
+    }
+
+    pub fn texture_view(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {
+        let texture = self
+            .inner
+            .view
+            .get_or_init(|| self.inner.image.create_texture(device, queue));
+
+        if self.inner.write.swap(false, Ordering::SeqCst) {
+            self.inner.image.write_texture(queue, &texture);
+        }
+
+        texture.create_view(&Default::default())
     }
 }
 
@@ -99,17 +122,7 @@ impl TextureBinding for Image {
         queue: &SharedQueue,
         _state: &mut Self::State,
     ) -> SharedBindingResource {
-        let texture = self
-            .inner
-            .view
-            .get_or_init(|| self.inner.image.create_texture(device, queue))
-            .clone();
-
-        if self.inner.write.swap(false, Ordering::SeqCst) {
-            self.inner.image.write_texture(queue, &texture);
-        }
-
-        SharedBindingResource::TextureView(texture.create_view(&Default::default()))
+        SharedBindingResource::TextureView(self.texture_view(device, queue))
     }
 }
 

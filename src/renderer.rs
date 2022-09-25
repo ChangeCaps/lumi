@@ -7,7 +7,7 @@ use wgpu::{
     CompareFunction, DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace,
     IndexFormat, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
     PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, StencilState,
-    Texture, TextureFormat, VertexBufferLayout, VertexState, VertexStepMode,
+    TextureFormat, TextureView, VertexBufferLayout, VertexState, VertexStepMode,
 };
 
 use crate::{
@@ -43,6 +43,7 @@ struct MeshBindings<'a> {
 pub struct RenderSettings {
     pub clear_color: [f32; 4],
     pub aspect_ratio: Option<f32>,
+    pub sample_count: u32,
     pub bloom_enabled: bool,
     pub bloom_threshold: f32,
     pub bloom_knee: f32,
@@ -54,6 +55,7 @@ impl Default for RenderSettings {
         Self {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             aspect_ratio: None,
+            sample_count: 1,
             bloom_enabled: true,
             bloom_threshold: 1.5,
             bloom_knee: 0.5,
@@ -62,26 +64,28 @@ impl Default for RenderSettings {
     }
 }
 
+struct CachedCamera {
+    camera: UniformBuffer<RawCamera>,
+    bindings: HashMap<NodeId, Bindings>,
+    frame_buffer: FrameBuffer,
+    bloom: Bloom,
+}
+
 pub struct Renderer {
     pub device: SharedDevice,
     pub queue: SharedQueue,
     pub settings: RenderSettings,
     material_cache: HashMap<TypeId, CachedMaterial>,
     mesh_cache: HashMap<MeshId, CachedMesh>,
-    camera_cache: HashMap<CameraId, UniformBuffer<RawCamera>>,
+    camera_cache: HashMap<CameraId, CachedCamera>,
     light_bindings: LightBindings,
-    bindings: HashMap<NodeId, Bindings>,
-    frame_buffer: FrameBuffer,
-    bloom: Bloom,
     tone_mapping: ToneMapping,
     shader_processor: ShaderProcessor,
 }
 
 impl Renderer {
     pub fn new(device: SharedDevice, queue: SharedQueue) -> Self {
-        let frame_buffer = FrameBuffer::new(&device, 1, 1, 4);
         let mut shader_processor = ShaderProcessor::default();
-        let bloom = Bloom::new(&device, &mut shader_processor, 1, 1);
         let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
         Self {
@@ -92,27 +96,9 @@ impl Renderer {
             mesh_cache: HashMap::new(),
             camera_cache: HashMap::new(),
             light_bindings: LightBindings::default(),
-            bindings: HashMap::new(),
-            frame_buffer,
-            bloom,
             tone_mapping,
             shader_processor,
         }
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.frame_buffer.resize(&self.device, width, height);
-        self.bloom.resize(&self.device, width, height);
-    }
-
-    pub fn set_sample_count(&mut self, sample_count: u32) {
-        if self.frame_buffer.sample_count() != sample_count {
-            // TODO: just recreate render pipelines
-            self.material_cache.clear();
-        }
-
-        self.frame_buffer
-            .set_sample_count(&self.device, sample_count);
     }
 
     fn prepare_material(&mut self, material: &dyn DynMaterial) {
@@ -212,7 +198,7 @@ impl Renderer {
                     bias: DepthBiasState::default(),
                 }),
                 multisample: MultisampleState {
-                    count: self.frame_buffer.sample_count(),
+                    count: self.settings.sample_count,
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
@@ -309,13 +295,31 @@ impl Renderer {
         }
     }
 
-    fn prepare_cameras(&mut self, world: &World) {
+    fn prepare_cameras(&mut self, world: &World, target_width: u32, target_height: u32) {
         for (id, camera) in world.iter_cameras() {
+            let width = camera.target.get_width(target_width);
+            let height = camera.target.get_height(target_height);
+
             if let Some(cached_camera) = self.camera_cache.get_mut(&id) {
-                **cached_camera = camera.raw_aspect(self.frame_buffer.aspect_ratio());
+                *cached_camera.camera = camera.raw_aspect(width as f32 / height as f32);
+
+                cached_camera
+                    .frame_buffer
+                    .resize(&self.device, width, height);
+                cached_camera.bloom.resize(&self.device, width, height);
             } else {
-                let camera = camera.raw_aspect(self.frame_buffer.aspect_ratio());
-                self.camera_cache.insert(id, UniformBuffer::new(camera));
+                let frame_buffer =
+                    FrameBuffer::new(&self.device, width, height, self.settings.sample_count);
+                let bloom = Bloom::new(&self.device, &mut self.shader_processor, width, height);
+
+                let camera = CachedCamera {
+                    camera: UniformBuffer::new(camera.raw()),
+                    frame_buffer,
+                    bindings: HashMap::new(),
+                    bloom,
+                };
+
+                self.camera_cache.insert(id, camera);
             }
         }
     }
@@ -329,19 +333,19 @@ impl Renderer {
     }
 
     fn prepare_bindings(&mut self, world: &World, camera: CameraId) {
+        let cached_camera = self.camera_cache.get_mut(&camera).unwrap();
+
         for (id, node) in world.iter_nodes() {
             let cached_material = self.material_cache.get(&node.material.type_id()).unwrap();
 
-            let bindings = self
+            let bindings = cached_camera
                 .bindings
                 .entry(id)
                 .or_insert_with(|| Bindings::new(&self.device, &cached_material.bindings_layout));
 
-            let camera = self.camera_cache.get(&camera).unwrap();
-
             let mesh_bindings = MeshBindings {
                 transform: node.transform,
-                camera: &camera,
+                camera: &cached_camera.camera,
             };
 
             bindings.bind(&self.device, &self.queue, node.material.as_ref());
@@ -351,20 +355,20 @@ impl Renderer {
         }
     }
 
-    pub fn render_camera(&mut self, world: &World, target: &Texture, camera: CameraId) {
-        self.prepare_materials(world);
-        self.prepare_meshes(world);
-        self.prepare_cameras(world);
-        self.prepare_lights(world);
+    pub fn render_camera(&mut self, world: &World, camera: CameraId, target: &TextureView) {
         self.prepare_bindings(world, camera);
 
+        let cached_camera = self.camera_cache.get_mut(&camera).unwrap();
+
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        let mut hdr_pass = self.frame_buffer.begin_hdr_render_pass(&mut encoder);
+        let mut hdr_pass = cached_camera
+            .frame_buffer
+            .begin_hdr_render_pass(&mut encoder);
 
         for (id, node) in world.iter_nodes() {
             let material = self.material_cache.get(&node.material.type_id()).unwrap();
             let mesh = self.mesh_cache.get(&node.mesh.id()).unwrap();
-            let bindings = self.bindings.get(&id).unwrap();
+            let bindings = cached_camera.bindings.get(&id).unwrap();
 
             hdr_pass.set_pipeline(&material.pipeline);
 
@@ -398,14 +402,12 @@ impl Renderer {
 
         drop(hdr_pass);
 
-        let target_view = target.create_view(&Default::default());
-
         if self.settings.bloom_enabled {
-            self.bloom.render(
+            cached_camera.bloom.render(
                 &self.device,
                 &self.queue,
                 &mut encoder,
-                &self.frame_buffer.hdr_view,
+                &cached_camera.frame_buffer.hdr_view,
                 self.settings.bloom_threshold,
                 self.settings.bloom_knee,
                 self.settings.bloom_scale,
@@ -416,16 +418,33 @@ impl Renderer {
             &self.device,
             &self.queue,
             &mut encoder,
-            &self.frame_buffer.hdr_view,
-            &target_view,
+            &cached_camera.frame_buffer.hdr_view,
+            &target,
         );
 
         self.queue.submit(std::iter::once(encoder.finish()));
     }
 
-    pub fn render(&mut self, world: &World, target: &Texture) {
-        for (id, _camera) in world.iter_cameras() {
-            self.render_camera(world, target, id);
+    pub fn render(
+        &mut self,
+        world: &World,
+        target: &TextureView,
+        target_width: u32,
+        target_height: u32,
+    ) {
+        self.prepare_materials(world);
+        self.prepare_meshes(world);
+        self.prepare_cameras(world, target_width, target_height);
+        self.prepare_lights(world);
+
+        let mut cameras = world.iter_cameras().collect::<Vec<_>>();
+        cameras.sort_by_key(|(_, camera)| camera.priority);
+
+        for (id, camera) in cameras.into_iter().rev() {
+            if camera.enabled {
+                let target = camera.target.get_view(target);
+                self.render_camera(world, id, target);
+            }
         }
     }
 }

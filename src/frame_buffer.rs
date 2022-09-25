@@ -1,5 +1,5 @@
 use wgpu::{
-    CommandEncoder, Extent3d, LoadOp, Operations, RenderPassColorAttachment,
+    Color, CommandEncoder, Extent3d, LoadOp, Operations, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, TextureDescriptor, TextureDimension,
     TextureFormat, TextureUsages,
 };
@@ -156,7 +156,7 @@ impl FrameBuffer {
                 view: &self.hdr_msaa_view.as_ref().unwrap_or(&self.hdr_view),
                 resolve_target: self.hdr_msaa_view.as_ref().map(|_| self.hdr_view.view()),
                 ops: Operations {
-                    load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    load: LoadOp::Clear(Color::TRANSPARENT),
                     store: true,
                 },
             })],

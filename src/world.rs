@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap};
 
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 
 use crate::{AsLight, Camera, CameraId, DynMaterial, Light, LightId, Material, Mesh, NodeId};
 
@@ -57,6 +57,11 @@ impl Node {
 
     pub fn with_transform(mut self, transform: Mat4) -> Self {
         self.transform = transform;
+        self
+    }
+
+    pub fn with_position(mut self, position: Vec3) -> Self {
+        self.transform = Mat4::from_translation(position);
         self
     }
 }

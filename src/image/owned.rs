@@ -32,11 +32,15 @@ impl Default for ImageData {
 
 impl ImageData {
     pub fn new(width: u32, height: u32, data: Vec<u8>) -> Self {
+        Self::with_format(width, height, data, TextureFormat::Rgba8UnormSrgb)
+    }
+
+    pub fn with_format(width: u32, height: u32, data: Vec<u8>, format: TextureFormat) -> Self {
         Self {
             width,
             height,
             data,
-            format: TextureFormat::Rgba8UnormSrgb,
+            format,
             filter: true,
         }
     }
@@ -58,6 +62,10 @@ impl ImageData {
     }
 
     pub fn write_texture(&self, queue: &SharedQueue, texture: &SharedTexture) {
+        if self.data.is_empty() {
+            return;
+        }
+
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: texture.texture(),
@@ -76,19 +84,23 @@ impl ImageData {
     }
 
     pub fn create_texture(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedTexture {
-        device.create_shared_texture_with_data(
-            queue,
-            &wgpu::TextureDescriptor {
-                label: None,
-                size: self.size(),
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: self.format,
-                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            },
-            &self.data,
-        )
+        let desc = wgpu::TextureDescriptor {
+            label: None,
+            size: self.size(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: self.format,
+            usage: TextureUsages::TEXTURE_BINDING
+                | TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_DST,
+        };
+
+        if self.data.is_empty() {
+            device.create_shared_texture(&desc)
+        } else {
+            device.create_shared_texture_with_data(queue, &desc, &self.data)
+        }
     }
 
     pub fn create_view(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {

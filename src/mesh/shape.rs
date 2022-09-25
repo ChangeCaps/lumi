@@ -160,12 +160,12 @@ pub fn uv_sphere(radius: f32, segments: u32) -> Mesh {
                 let d = index;
 
                 indices.push(a as u32);
-                indices.push(b as u32);
                 indices.push(c as u32);
+                indices.push(b as u32);
 
                 indices.push(b as u32);
-                indices.push(d as u32);
                 indices.push(c as u32);
+                indices.push(d as u32);
             }
 
             index += 1;

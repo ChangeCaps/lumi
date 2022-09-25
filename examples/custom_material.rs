@@ -22,10 +22,11 @@ fn main() {
     });
     world.add_camera(Camera::default().with_position(Vec3::new(0.0, 0.0, 5.0)));
 
-    util::framework(move |event, renderer, surface| match event {
+    util::framework(move |event, renderer, surface, size| match event {
         Event::RedrawRequested(_) => {
             let target = surface.get_current_texture().unwrap();
-            renderer.render(&world, &target.texture);
+            let view = target.texture.create_view(&Default::default());
+            renderer.render(&world, &view, size.width, size.height);
             target.present();
         }
         _ => (),

@@ -9,16 +9,18 @@ fn main() {
     let image = Image::load_from_file("examples/assets/texture.png").unwrap();
     let normal = NormalMap::load_from_file("examples/assets/normal.png").unwrap();
 
-    let cube = world.add_node(Node::new(
-        PbrMaterial {
-            base_color_texture: Some(image.clone()),
-            normal_map: Some(normal),
-            emissive_map: Some(image),
-            emissive: Vec3::new(1.0, 1.0, 1.0) * 2.0,
-            ..Default::default()
-        },
-        shape::cube(1.0, 1.0, 1.0),
-    ));
+    let cube = world.add_node(
+        Node::new(
+            PbrMaterial {
+                base_color_texture: Some(image),
+                normal_map: Some(normal),
+                emissive: Vec3::new(2.0, 1.0, 0.5) * 2.0,
+                ..Default::default()
+            },
+            shape::cube(1.0, 1.0, 1.0),
+        )
+        .with_position(Vec3::new(0.0, 0.0, 0.0)),
+    );
     world.add_light(DirectionalLight {
         direction: Vec3::new(-1.0, -1.0, -1.0),
         intensity: 2.0,
@@ -32,12 +34,13 @@ fn main() {
     });
     world.add_camera(Camera::default().with_position(Vec3::new(0.0, 0.0, 5.0)));
 
-    util::framework(move |event, renderer, surface| match event {
+    util::framework(move |event, renderer, surface, size| match event {
         Event::RedrawRequested(_) => {
             *world.transform_mut(cube) *= Mat4::from_rotation_y(0.01);
 
             let target = surface.get_current_texture().unwrap();
-            renderer.render(&world, &target.texture);
+            let view = target.texture.create_view(&Default::default());
+            renderer.render(&world, &view, size.width, size.height);
             target.present();
         }
         _ => (),

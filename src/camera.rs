@@ -1,5 +1,8 @@
 use encase::ShaderType;
 use glam::{Mat4, Vec3};
+use wgpu::TextureView;
+
+use crate::SharedTextureView;
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawCamera {
@@ -127,10 +130,42 @@ impl Projection {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CameraTarget {
+    #[default]
+    Main,
+    Texture(SharedTextureView),
+}
+
+impl CameraTarget {
+    pub fn get_view<'a>(&'a self, main: &'a TextureView) -> &'a TextureView {
+        match self {
+            CameraTarget::Main => main,
+            CameraTarget::Texture(texture) => texture.view(),
+        }
+    }
+
+    pub fn get_width(&self, main: u32) -> u32 {
+        match self {
+            CameraTarget::Main => main,
+            CameraTarget::Texture(texture) => texture.size().width,
+        }
+    }
+
+    pub fn get_height(&self, main: u32) -> u32 {
+        match self {
+            CameraTarget::Main => main,
+            CameraTarget::Texture(texture) => texture.size().height,
+        }
+    }
+}
+
 pub struct Camera {
     pub view: Mat4,
     pub projection: Projection,
-    pub prioriy: u32,
+    pub target: CameraTarget,
+    pub priority: u32,
+    pub enabled: bool,
 }
 
 impl Default for Camera {
@@ -138,7 +173,9 @@ impl Default for Camera {
         Self {
             view: Mat4::IDENTITY,
             projection: Projection::default(),
-            prioriy: 0,
+            target: CameraTarget::default(),
+            priority: 0,
+            enabled: true,
         }
     }
 }
@@ -160,7 +197,12 @@ impl Camera {
     }
 
     pub fn with_priority(mut self, priority: u32) -> Self {
-        self.prioriy = priority;
+        self.priority = priority;
+        self
+    }
+
+    pub fn with_target(mut self, target: CameraTarget) -> Self {
+        self.target = target;
         self
     }
 

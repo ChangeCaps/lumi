@@ -6,7 +6,7 @@ use winit::{
     window::Window,
 };
 
-pub fn framework(mut f: impl FnMut(Event<()>, &mut Renderer, &Surface) + 'static) -> ! {
+pub fn framework(mut f: impl FnMut(Event<()>, &mut Renderer, &Surface, Extent3d) + 'static) -> ! {
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
 
@@ -34,7 +34,6 @@ pub fn framework(mut f: impl FnMut(Event<()>, &mut Renderer, &Surface) + 'static
     let queue = SharedQueue::new(queue);
 
     let mut renderer = Renderer::new(device, queue);
-    renderer.resize(configuration.width, configuration.height);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -52,13 +51,11 @@ pub fn framework(mut f: impl FnMut(Event<()>, &mut Renderer, &Surface) + 'static
                     configuration.width = new_size.width;
                     configuration.height = new_size.height;
                     resized = true;
-                    renderer.resize(new_size.width, new_size.height);
                 }
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                     configuration.width = new_inner_size.width;
                     configuration.height = new_inner_size.height;
                     resized = true;
-                    renderer.resize(new_inner_size.width, new_inner_size.height);
                 }
                 _ => (),
             },
@@ -68,6 +65,12 @@ pub fn framework(mut f: impl FnMut(Event<()>, &mut Renderer, &Surface) + 'static
             _ => (),
         }
 
-        f(event, &mut renderer, &surface);
+        let size = Extent3d {
+            width: configuration.width,
+            height: configuration.height,
+            depth_or_array_layers: 1,
+        };
+
+        f(event, &mut renderer, &surface, size);
     });
 }

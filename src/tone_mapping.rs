@@ -1,6 +1,6 @@
 use lumi_macro::Bind;
 use wgpu::{
-    AddressMode, BlendState, ColorTargetState, ColorWrites, CommandEncoder, FilterMode,
+    AddressMode, BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, FilterMode,
     FragmentState, LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor,
     RenderPipeline, TextureFormat, TextureView, VertexState,
 };
@@ -115,7 +115,7 @@ impl ToneMapping {
                 view: target,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Load,
+                    load: LoadOp::Clear(Color::TRANSPARENT),
                     store: true,
                 },
             })],
