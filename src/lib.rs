@@ -21,6 +21,7 @@ mod shader_io;
 mod shader_processor;
 mod storage_buffer;
 mod texture;
+mod tone_mapping;
 mod world;
 
 pub use self::image::*;
@@ -44,6 +45,7 @@ pub use shader_io::*;
 pub use shader_processor::*;
 pub use storage_buffer::*;
 pub use texture::*;
+pub use tone_mapping::*;
 pub use world::*;
 
 pub use wgpu::*;

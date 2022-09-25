@@ -1,11 +1,15 @@
 use std::{ops::Deref, sync::Arc};
 
+use once_cell::sync::OnceCell;
 use wgpu::{
     Extent3d, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
     TextureViewDescriptor,
 };
 
-use crate::{TextureId, TextureViewId};
+use crate::{
+    SamplerBinding, SharedBindingResource, SharedDevice, SharedQueue, SharedSampler,
+    TextureBinding, TextureId, TextureViewId,
+};
 
 #[derive(Clone, Debug)]
 pub struct SharedTexture {
@@ -196,3 +200,57 @@ impl PartialEq for SharedTextureView {
 }
 
 impl Eq for SharedTextureView {}
+
+impl TextureBinding for SharedTextureView {
+    type State = ();
+
+    fn binding(
+        &self,
+        _device: &SharedDevice,
+        _queue: &SharedQueue,
+        _state: &mut Self::State,
+    ) -> SharedBindingResource {
+        SharedBindingResource::TextureView(self.clone())
+    }
+}
+
+impl TextureBinding for &SharedTextureView {
+    type State = ();
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        TextureBinding::binding(*self, device, queue, state)
+    }
+}
+
+impl SamplerBinding for SharedTextureView {
+    type State = OnceCell<SharedSampler>;
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        _queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        let sampler = state.get_or_init(|| device.create_shared_sampler(&Default::default()));
+
+        SharedBindingResource::Sampler(sampler.clone())
+    }
+}
+
+impl SamplerBinding for &SharedTextureView {
+    type State = OnceCell<SharedSampler>;
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        SamplerBinding::binding(*self, device, queue, state)
+    }
+}

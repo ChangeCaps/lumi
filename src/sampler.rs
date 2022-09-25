@@ -2,7 +2,7 @@ use std::{num::NonZeroU8, ops::Deref, sync::Arc};
 
 use wgpu::{AddressMode, CompareFunction, FilterMode, SamplerBorderColor};
 
-use crate::SamplerId;
+use crate::{SamplerBinding, SamplerId, SharedBindingResource, SharedDevice, SharedQueue};
 
 #[derive(Clone, Debug)]
 pub struct SharedSampler {
@@ -110,3 +110,29 @@ impl PartialEq for SharedSampler {
 }
 
 impl Eq for SharedSampler {}
+
+impl SamplerBinding for SharedSampler {
+    type State = ();
+
+    fn binding(
+        &self,
+        _device: &SharedDevice,
+        _queue: &SharedQueue,
+        _state: &mut Self::State,
+    ) -> SharedBindingResource {
+        SharedBindingResource::Sampler(self.clone())
+    }
+}
+
+impl SamplerBinding for &SharedSampler {
+    type State = ();
+
+    fn binding(
+        &self,
+        device: &SharedDevice,
+        queue: &SharedQueue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        SamplerBinding::binding(*self, device, queue, state)
+    }
+}

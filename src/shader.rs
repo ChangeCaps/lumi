@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::HashMap,
     path::{Path, PathBuf},
 };
 
@@ -57,31 +58,37 @@ pub struct Shader {
 }
 
 impl Shader {
-    fn match_bindings(this: &mut naga::Module, other: &naga::Module) -> Result<(), ShaderError> {
-        for (_, variable) in other.global_variables.iter() {
-            if let Some(binding) = variable.binding.clone() {
-                let handle = this.global_variables.iter().find_map(|(handle, v)| {
-                    if v.name == variable.name {
-                        Some(handle)
-                    } else {
-                        None
+    fn rebind_modules(
+        this: &mut naga::Module,
+        other: &mut naga::Module,
+    ) -> Result<(), ShaderError> {
+        let mut bindings = HashMap::<Option<String>, u32>::new();
+
+        for (_handle, variable) in this.global_variables.iter_mut() {
+            if let Some(ref mut binding) = variable.binding {
+                match bindings.get(&variable.name) {
+                    Some(&rebinding) => {
+                        binding.binding = rebinding;
                     }
-                });
+                    None => {
+                        binding.binding = bindings.len() as u32;
 
-                if this
-                    .global_variables
-                    .iter()
-                    .any(|(_, v)| v.binding != Some(binding.clone()) && v.name == variable.name)
-                {
-                    return Err(ShaderError::BindingMismatch(variable.name.clone()));
+                        bindings.insert(variable.name.clone(), binding.binding);
+                    }
                 }
+            }
+        }
 
-                if let Some(handle) = handle {
-                    let this_variable = &mut this.global_variables[handle];
-                    if let Some(ref mut this_binding) = this_variable.binding {
-                        if this_binding.group == binding.group {
-                            this_binding.binding = binding.binding;
-                        }
+        for (_handle, variable) in other.global_variables.iter_mut() {
+            if let Some(ref mut binding) = variable.binding {
+                match bindings.get(&variable.name) {
+                    Some(&rebinding) => {
+                        binding.binding = rebinding;
+                    }
+                    None => {
+                        binding.binding = bindings.len() as u32;
+
+                        bindings.insert(variable.name.clone(), binding.binding);
                     }
                 }
             }
@@ -90,28 +97,36 @@ impl Shader {
         Ok(())
     }
 
-    pub fn from_wgsl(wgsl: &str, match_bindings: Option<&Self>) -> Result<Self, ShaderError> {
-        let mut module = naga::front::wgsl::parse_str(wgsl)?;
+    pub fn rebind(&mut self, other: &mut Self) -> Result<(), ShaderError> {
+        Self::rebind_modules(&mut self.module, &mut other.module)?;
 
-        if let Some(other) = match_bindings {
-            Self::match_bindings(&mut module, &other.module)?;
-        }
+        Ok(())
+    }
 
+    pub fn from_wgsl(wgsl: &str) -> Result<Self, ShaderError> {
+        let module = naga::front::wgsl::parse_str(wgsl)?;
+
+        Ok(Self {
+            module,
+            wgsl: String::new(),
+            shader_module: None,
+        })
+    }
+
+    pub fn compile(&mut self, device: &SharedDevice) -> Result<(), ShaderError> {
         let mut validator = Validator::new(ValidationFlags::all(), Capabilities::empty());
-        let module_info = validator.validate(&module)?;
+        let module_info = validator.validate(&self.module)?;
 
-        let wgsl = naga::back::wgsl::write_string(
-            &module,
+        self.wgsl = naga::back::wgsl::write_string(
+            &self.module,
             &module_info,
             naga::back::wgsl::WriterFlags::empty(),
         )?
         .into();
 
-        Ok(Self {
-            module,
-            wgsl,
-            shader_module: None,
-        })
+        self.shader_module = Some(self.create_shader_module(device));
+
+        Ok(())
     }
 
     pub fn module(&self) -> &naga::Module {
@@ -131,7 +146,7 @@ impl Shader {
 
     pub fn shader_module(&mut self, device: &SharedDevice) -> &ShaderModule {
         if self.shader_module.is_none() {
-            self.shader_module = Some(self.create_shader_module(device));
+            self.compile(device).unwrap();
         }
 
         self.shader_module.as_ref().unwrap()

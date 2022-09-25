@@ -211,9 +211,15 @@ pub trait StorageTextureBinding {
 pub trait SamplerBinding {
     type State: Any + Default;
 
-    fn entry() -> BindLayoutEntry {
+    fn entry(filtering: bool) -> BindLayoutEntry {
+        let ty = if filtering {
+            SamplerBindingType::Filtering
+        } else {
+            SamplerBindingType::NonFiltering
+        };
+
         BindLayoutEntry {
-            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+            ty: BindingType::Sampler(ty),
             count: None,
         }
     }

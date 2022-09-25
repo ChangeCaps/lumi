@@ -36,6 +36,7 @@ impl ToTokens for BindingType {
 
 struct BindingAttribute {
     name: Option<String>,
+    filtering: bool,
 }
 
 struct AttributeInfo {
@@ -68,19 +69,40 @@ impl AttributeInfo {
                 ));
             }
 
-            let name = if attr.tokens.is_empty() {
-                None
-            } else {
-                let name = attr.parse_args_with(|parser: ParseStream| {
-                    parser.parse::<name>()?;
-                    parser.parse::<Token![=]>()?;
-                    let name = parser.parse::<syn::LitStr>()?;
-                    Ok(name.value())
+            let mut name = None;
+            let mut filtering = true;
+
+            if !attr.tokens.is_empty() {
+                attr.parse_args_with(|parser: ParseStream| {
+                    while !parser.is_empty() {
+                        let ident = parser.parse::<syn::Ident>()?;
+
+                        if ident == "name" {
+                            parser.parse::<Token![=]>()?;
+                            let lit = parser.parse::<syn::LitStr>()?;
+                            name = Some(lit.value());
+                        } else if ident == "filtering" {
+                            parser.parse::<Token![=]>()?;
+                            let lit = parser.parse::<syn::LitBool>()?;
+                            filtering = lit.value;
+                        } else {
+                            return Err(
+                                parser.error(format!("unknown attribute argument: {}", ident))
+                            );
+                        }
+
+                        if parser.is_empty() {
+                            break;
+                        }
+
+                        parser.parse::<Token![,]>()?;
+                    }
+
+                    Ok(())
                 })?;
-                Some(name)
             };
 
-            let attr = BindingAttribute { name };
+            let attr = BindingAttribute { name, filtering };
 
             bindings.insert(ty, attr);
         }
@@ -151,10 +173,17 @@ fn impl_entries(data: &Data, lumi: &syn::Path) -> TokenStream {
                 let mut bindings = Vec::new();
                 for (ty, attr) in attrs.bindings.iter() {
                     let name = attr.name.as_ref().unwrap_or(&name);
+                    let filtering = attr.filtering;
 
-                    let entry = quote! {
-                        <#field_ty as #lumi::#ty>::entry()
-                            .into_layout_entry::<<#field_ty as #lumi::#ty>::State>(#name)
+                    let entry = match ty {
+                        BindingType::Sampler => quote! {
+                            <#field_ty as #lumi::#ty>::entry(#filtering)
+                                .into_layout_entry::<<#field_ty as #lumi::#ty>::State>(#name)
+                        },
+                        _ => quote! {
+                            <#field_ty as #lumi::#ty>::entry()
+                                .into_layout_entry::<<#field_ty as #lumi::#ty>::State>(#name)
+                        },
                     };
 
                     let binding = quote_spanned! {field.ident.span()=>

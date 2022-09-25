@@ -164,9 +164,14 @@ impl ShaderProcessor {
         add_module!("camera.wgsl", "wgsl/camera.wgsl");
         add_module!("mesh.wgsl", "wgsl/mesh.wgsl");
         add_module!("light.wgsl", "wgsl/light.wgsl");
+        add_module!("fullscreen.wgsl", "wgsl/fullscreen.wgsl");
+        add_module!("tonemapping.wgsl", "wgsl/tonemapping.wgsl");
         add_module!("pbr_material.wgsl", "wgsl/pbr_material.wgsl");
-        add_module!("pbr_light.wgsl", "wgsl/pbr_light.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
+
+        add_module!("pbr_light.wgsl", "wgsl/pbr_light.wgsl");
+        add_module!("fullscreen_vert.wgsl", "wgsl/fullscreen_vert.wgsl");
+        add_module!("tonemapping_frag.wgsl", "wgsl/tonemapping_frag.wgsl");
     }
 
     fn read_shader_source(

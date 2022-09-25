@@ -3,19 +3,17 @@ use std::{any::TypeId, borrow::Cow, collections::HashMap};
 use glam::Mat4;
 use lumi_macro::Bind;
 use wgpu::{
-    util::BufferInitDescriptor, BlendState, BufferUsages, Color, ColorTargetState, ColorWrites,
+    util::BufferInitDescriptor, BlendState, BufferUsages, ColorTargetState, ColorWrites,
     CompareFunction, DepthBiasState, DepthStencilState, Face, FragmentState, FrontFace,
-    IndexFormat, LoadOp, MultisampleState, Operations, PipelineLayout, PipelineLayoutDescriptor,
-    PolygonMode, PrimitiveState, PrimitiveTopology, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, StencilState, Texture, TextureFormat, VertexBufferLayout,
-    VertexState, VertexStepMode,
+    IndexFormat, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
+    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, StencilState,
+    Texture, TextureFormat, VertexBufferLayout, VertexState, VertexStepMode,
 };
 
 use crate::{
     Bindings, BindingsLayout, CameraId, DynMaterial, FrameBuffer, LightBindings, Mesh, MeshId,
     NodeId, RawCamera, Shader, ShaderProcessor, SharedBuffer, SharedDevice, SharedQueue,
-    UniformBuffer, World,
+    ToneMapping, UniformBuffer, World,
 };
 
 #[allow(unused)]
@@ -66,12 +64,15 @@ pub struct Renderer {
     light_bindings: LightBindings,
     bindings: HashMap<NodeId, Bindings>,
     frame_buffer: FrameBuffer,
+    tone_mapping: ToneMapping,
     shader_processor: ShaderProcessor,
 }
 
 impl Renderer {
     pub fn new(device: SharedDevice, queue: SharedQueue) -> Self {
-        let frame_buffer = FrameBuffer::new(&device, 1, 1);
+        let frame_buffer = FrameBuffer::new(&device, 1, 1, 4);
+        let mut shader_processor = ShaderProcessor::default();
+        let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
         Self {
             device,
@@ -82,13 +83,24 @@ impl Renderer {
             camera_cache: HashMap::new(),
             light_bindings: LightBindings::default(),
             bindings: HashMap::new(),
-            shader_processor: ShaderProcessor::default(),
             frame_buffer,
+            tone_mapping,
+            shader_processor,
         }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.frame_buffer.resize(&self.device, width, height);
+    }
+
+    pub fn set_sample_count(&mut self, sample_count: u32) {
+        if self.frame_buffer.sample_count() != sample_count {
+            // TODO: just recreate render pipelines
+            self.material_cache.clear();
+        }
+
+        self.frame_buffer
+            .set_sample_count(&self.device, sample_count);
     }
 
     fn prepare_material(&mut self, material: &dyn DynMaterial) {
@@ -106,9 +118,12 @@ impl Renderer {
             .process(material.fragment_shader())
             .unwrap();
 
-        let mut vertex_shader = Shader::from_wgsl(&vertex_source, None).unwrap();
-        let mut fragment_shader =
-            Shader::from_wgsl(&fragment_source, Some(&vertex_shader)).unwrap();
+        let mut vertex_shader = Shader::from_wgsl(&vertex_source).unwrap();
+        let mut fragment_shader = Shader::from_wgsl(&fragment_source).unwrap();
+        vertex_shader.rebind(&mut fragment_shader).unwrap();
+
+        vertex_shader.compile(&self.device).unwrap();
+        fragment_shader.compile(&self.device).unwrap();
 
         let bindings_layout = BindingsLayout::new()
             .with_shader(&mut vertex_shader)
@@ -163,7 +178,7 @@ impl Renderer {
                     module: &fragment_shader.shader_module(&self.device),
                     entry_point: "fragment",
                     targets: &[Some(ColorTargetState {
-                        format: TextureFormat::Bgra8UnormSrgb,
+                        format: TextureFormat::Rgba16Float,
                         blend: Some(BlendState::ALPHA_BLENDING),
                         write_mask: ColorWrites::ALL,
                     })],
@@ -185,7 +200,7 @@ impl Renderer {
                     bias: DepthBiasState::default(),
                 }),
                 multisample: MultisampleState {
-                    count: 1,
+                    count: self.frame_buffer.sample_count(),
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
@@ -331,66 +346,55 @@ impl Renderer {
         self.prepare_lights(world);
         self.prepare_bindings(world, camera);
 
-        let target_view = target.create_view(&Default::default());
-        let depth_view = self.frame_buffer.depth.create_view(&Default::default());
-
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("Lumi HDR Pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &target_view,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color::BLACK),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &depth_view,
-                depth_ops: Some(Operations {
-                    load: LoadOp::Clear(1.0),
-                    store: true,
-                }),
-                stencil_ops: None,
-            }),
-        });
+        let mut hdr_pass = self.frame_buffer.begin_hdr_render_pass(&mut encoder);
 
         for (id, node) in world.iter_nodes() {
             let material = self.material_cache.get(&node.material.type_id()).unwrap();
             let mesh = self.mesh_cache.get(&node.mesh.id()).unwrap();
             let bindings = self.bindings.get(&id).unwrap();
 
-            render_pass.set_pipeline(&material.pipeline);
+            hdr_pass.set_pipeline(&material.pipeline);
 
             for (i, bind_group) in bindings.bind_groups().enumerate() {
-                render_pass.set_bind_group(i as u32, bind_group, &[]);
+                hdr_pass.set_bind_group(i as u32, bind_group, &[]);
             }
 
             if let Some(buffer) = mesh.vertex_buffers.get(Mesh::POSITION) {
-                render_pass.set_vertex_buffer(0, buffer.slice(..));
+                hdr_pass.set_vertex_buffer(0, buffer.slice(..));
             }
 
             if let Some(buffer) = mesh.vertex_buffers.get(Mesh::NORMAL) {
-                render_pass.set_vertex_buffer(1, buffer.slice(..));
+                hdr_pass.set_vertex_buffer(1, buffer.slice(..));
             }
 
             if let Some(buffer) = mesh.vertex_buffers.get(Mesh::TANGENT) {
-                render_pass.set_vertex_buffer(2, buffer.slice(..));
+                hdr_pass.set_vertex_buffer(2, buffer.slice(..));
             }
 
             if let Some(buffer) = mesh.vertex_buffers.get(Mesh::UV_0) {
-                render_pass.set_vertex_buffer(3, buffer.slice(..));
+                hdr_pass.set_vertex_buffer(3, buffer.slice(..));
             }
 
             if let Some(buffer) = mesh.index_buffer.as_ref() {
-                render_pass.set_index_buffer(buffer.slice(..), IndexFormat::Uint32);
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                hdr_pass.set_index_buffer(buffer.slice(..), IndexFormat::Uint32);
+                hdr_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
             } else {
-                render_pass.draw(0..mesh.vertex_count, 0..1);
+                hdr_pass.draw(0..mesh.vertex_count, 0..1);
             }
         }
 
-        drop(render_pass);
+        drop(hdr_pass);
+
+        let target_view = target.create_view(&Default::default());
+        self.tone_mapping.run(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &self.frame_buffer.hdr_view,
+            &target_view,
+        );
+
         self.queue.submit(std::iter::once(encoder.finish()));
     }
 
