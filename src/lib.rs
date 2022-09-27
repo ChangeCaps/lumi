@@ -1,55 +1,38 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![doc(html_favicon_url = "https://i.imgur.com/XTQGS8H.png")]
+#![doc(html_logo_url = "https://i.imgur.com/XTQGS8H.png")]
 
-mod bind;
-mod binding;
-mod bloom;
+pub mod bind;
+pub mod binding;
+pub mod bloom;
 mod buffer;
-mod camera;
+pub mod camera;
 mod device;
-mod frame_buffer;
-mod id;
-mod image;
-mod key_map;
-mod light;
-mod material;
-mod mesh;
-mod pbr;
+pub mod frame_buffer;
+pub mod id;
+pub mod image;
+pub mod key_map;
+pub mod light;
+pub mod material;
+pub mod mesh;
+pub mod pbr;
 mod queue;
-mod renderer;
+pub mod renderable;
+pub mod renderer;
+pub mod resources;
 mod sampler;
-mod shader;
-mod shader_io;
-mod shader_processor;
-mod storage_buffer;
+pub mod shader;
 mod texture;
-mod tone_mapping;
-mod world;
+pub mod tone_mapping;
+pub mod world;
 
-pub use self::image::*;
-pub use bind::*;
-pub use binding::*;
-pub use bloom::*;
-pub use buffer::*;
-pub use camera::*;
-pub use device::*;
-pub use frame_buffer::*;
-pub use id::*;
-pub use key_map::*;
-pub use light::*;
-pub use material::*;
-pub use mesh::*;
-pub use pbr::*;
-pub use queue::*;
-pub use renderer::*;
-pub use sampler::*;
-pub use shader::*;
-pub use shader_io::*;
-pub use shader_processor::*;
-pub use storage_buffer::*;
-pub use texture::*;
-pub use tone_mapping::*;
-pub use world::*;
+pub use buffer::SharedBuffer;
+pub use device::SharedDevice;
+pub use queue::SharedQueue;
+pub use sampler::SharedSampler;
+pub use texture::{SharedTexture, SharedTextureView};
 
+#[doc(hidden)]
 pub use wgpu::*;
 
 pub mod math {
@@ -58,5 +41,14 @@ pub mod math {
 
 pub mod prelude {
     pub use crate::math::*;
-    pub use crate::*;
+
+    pub use crate::bind::Bind;
+    pub use crate::camera::{Camera, CameraTarget, Orthographic, Perspective, Projection};
+    pub use crate::id::{CameraId, LightId, NodeId};
+    pub use crate::image::{Image, ImageData, NormalMap};
+    pub use crate::light::{DirectionalLight, PointLight};
+    pub use crate::material::{Material, MeshNode};
+    pub use crate::mesh::{shape, Mesh};
+    pub use crate::pbr::PbrMaterial;
+    pub use crate::world::{Node, World};
 }

@@ -13,9 +13,9 @@ use wgpu::{
     TextureViewDimension,
 };
 
-use crate::{SharedBuffer, SharedDevice, SharedQueue, SharedSampler, SharedTextureView};
-
 pub use lumi_macro::Bind;
+
+use crate::{SharedBuffer, SharedDevice, SharedQueue, SharedSampler, SharedTextureView};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SharedBufferBinding {
@@ -48,7 +48,7 @@ impl SharedBindingResource {
 #[derive(Clone, Debug)]
 pub struct BindingLayoutEntry {
     pub name: Cow<'static, str>,
-    pub state: fn() -> Box<dyn Any>,
+    pub state: fn() -> Box<dyn Any + Send + Sync>,
     pub visibility: ShaderStages,
     pub ty: BindingType,
     pub count: Option<NonZeroU32>,
@@ -106,7 +106,7 @@ pub struct BindLayoutEntry {
 }
 
 impl BindLayoutEntry {
-    pub fn into_layout_entry<T: Any + Default>(
+    pub fn into_layout_entry<T: Any + Default + Send + Sync>(
         self,
         name: impl Into<Cow<'static, str>>,
     ) -> BindingLayoutEntry {

@@ -21,7 +21,7 @@ encase = { version = "0.3", features = ["glam"] }
 glam = { version = "0.21", features = ["bytemuck"] }
 image = { version = "0.24", optional = true }
 mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
-naga = { version = "0.9", features = ["wgsl-out"] }
+naga = { version = "0.9", features = ["glsl-in", "wgsl-out"] }
 once_cell = "1.15"
 thiserror = "1.0"
 wgpu = "0.13"

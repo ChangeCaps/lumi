@@ -2,7 +2,11 @@ use std::{num::NonZeroU8, ops::Deref, sync::Arc};
 
 use wgpu::{AddressMode, CompareFunction, FilterMode, SamplerBorderColor};
 
-use crate::{SamplerBinding, SamplerId, SharedBindingResource, SharedDevice, SharedQueue};
+use crate::{
+    bind::{SamplerBinding, SharedBindingResource},
+    id::SamplerId,
+    SharedDevice, SharedQueue,
+};
 
 #[derive(Clone, Debug)]
 pub struct SharedSampler {

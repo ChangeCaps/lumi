@@ -1,6 +1,10 @@
 use glam::{Vec3, Vec4};
 
-use crate::{Bind, Image, Material, NormalMap};
+use crate::{
+    bind::Bind,
+    image::{Image, NormalMap},
+    material::Material,
+};
 
 #[derive(Clone, Debug, Bind)]
 pub struct PbrMaterial {

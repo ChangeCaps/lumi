@@ -1,7 +1,7 @@
 use encase::ShaderType;
 use glam::Vec3;
 
-use crate::{Bind, StorageBuffer};
+use crate::{bind::Bind, buffer::StorageBuffer};
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawPointLight {

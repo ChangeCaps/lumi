@@ -131,7 +131,7 @@ pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     queue: &#lumi::SharedQueue,
                     name: &::std::primitive::str,
                     state: &mut dyn ::std::any::Any,
-                ) -> ::std::option::Option<#lumi::SharedBindingResource> {
+                ) -> ::std::option::Option<#lumi::bind::SharedBindingResource> {
                     #bind_impl
                 }
             }
@@ -145,8 +145,8 @@ pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let sampler_impl = impl_bind!(Sampler, get_sampler);
 
     let expanded = quote! {
-        impl #impl_generics #lumi::Bind for #ident #ty_generics #where_clause {
-            fn entries() -> ::std::collections::LinkedList<#lumi::BindingLayoutEntry> {
+        impl #impl_generics #lumi::bind::Bind for #ident #ty_generics #where_clause {
+            fn entries() -> ::std::collections::LinkedList<#lumi::bind::BindingLayoutEntry> {
                 #entries_impl
             }
 
@@ -177,12 +177,12 @@ fn impl_entries(data: &Data, lumi: &syn::Path) -> TokenStream {
 
                     let entry = match ty {
                         BindingType::Sampler => quote! {
-                            <#field_ty as #lumi::#ty>::entry(#filtering)
-                                .into_layout_entry::<<#field_ty as #lumi::#ty>::State>(#name)
+                            <#field_ty as #lumi::bind::#ty>::entry(#filtering)
+                                .into_layout_entry::<<#field_ty as #lumi::bind::#ty>::State>(#name)
                         },
                         _ => quote! {
-                            <#field_ty as #lumi::#ty>::entry()
-                                .into_layout_entry::<<#field_ty as #lumi::#ty>::State>(#name)
+                            <#field_ty as #lumi::bind::#ty>::entry()
+                                .into_layout_entry::<<#field_ty as #lumi::bind::#ty>::State>(#name)
                         },
                     };
 
@@ -228,7 +228,7 @@ fn impl_bind(data: &Data, lumi: &syn::Path, binding_ty: BindingType) -> TokenStr
                 if let Some(attr) = attrs.bindings.get(&binding_ty) {
                     let name = attr.name.as_ref().unwrap_or(&name);
                     quote_spanned! {field.ident.span()=>
-                        #name => Some(<#ty as #lumi::#binding_ty>::binding(
+                        #name => Some(<#ty as #lumi::bind::#binding_ty>::binding(
                             &self.#field_ident,
                             device,
                             queue,

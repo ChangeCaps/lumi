@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc};
 
-use crate::QueueId;
+use crate::id::QueueId;
 
 #[derive(Clone, Debug)]
 pub struct SharedQueue {

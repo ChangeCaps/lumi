@@ -5,8 +5,8 @@ use wgpu::{
 };
 
 use crate::{
-    DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, SharedDevice,
-    SharedQueue, SharedSampler, SharedTexture, SharedTextureView, TextureBinding,
+    bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
+    SharedDevice, SharedQueue, SharedSampler, SharedTexture, SharedTextureView,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

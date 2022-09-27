@@ -9,8 +9,10 @@ use wgpu::{
 };
 
 use crate::{
-    Bind, Bindings, BindingsLayout, Shader, ShaderProcessor, ShaderRef, SharedDevice, SharedQueue,
-    SharedTexture, SharedTextureView,
+    bind::Bind,
+    binding::{Bindings, BindingsLayout},
+    shader::{ShaderProcessor, ShaderRef},
+    SharedDevice, SharedQueue, SharedTexture, SharedTextureView,
 };
 
 struct MipChain {
@@ -146,15 +148,12 @@ impl Bloom {
         width: u32,
         height: u32,
     ) -> Self {
-        let vertex = shader_processor
+        let mut vertex = shader_processor
             .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
             .unwrap();
-        let fragment = shader_processor
+        let mut fragment = shader_processor
             .process(ShaderRef::module("lumi/bloom_frag.wgsl"))
             .unwrap();
-
-        let mut vertex = Shader::from_wgsl(&vertex).unwrap();
-        let mut fragment = Shader::from_wgsl(&fragment).unwrap();
         vertex.rebind(&mut fragment).unwrap();
 
         let down_layout = BindingsLayout::new()

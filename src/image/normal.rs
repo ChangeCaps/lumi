@@ -3,9 +3,11 @@ use std::ops::{Deref, DerefMut};
 use wgpu::TextureFormat;
 
 use crate::{
-    DefaultSampler, DefaultTexture, Image, ImageData, SamplerBinding, SharedBindingResource,
-    SharedDevice, SharedQueue, SharedSampler, SharedTextureView, TextureBinding,
+    bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
+    SharedDevice, SharedQueue, SharedSampler, SharedTextureView,
 };
+
+use super::{Image, ImageData};
 
 #[derive(Clone, Debug, Default)]
 pub struct NormalMap(Image);

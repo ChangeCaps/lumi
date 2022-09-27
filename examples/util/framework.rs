@@ -1,5 +1,6 @@
 use futures_lite::future;
-use lumi::*;
+
+use lumi::{renderer::Renderer, *};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -28,7 +29,7 @@ pub fn framework(mut f: impl FnMut(Event<()>, &mut Renderer, &Surface, Extent3d)
         height: window.inner_size().height,
         present_mode: PresentMode::Fifo,
     };
-    let mut resized = false;
+    let mut resized = true;
 
     let device = SharedDevice::new(device);
     let queue = SharedQueue::new(queue);

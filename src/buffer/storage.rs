@@ -7,8 +7,8 @@ use encase::{internal::WriteInto, ShaderSize, ShaderType};
 use wgpu::{util::BufferInitDescriptor, BufferUsages};
 
 use crate::{
-    SharedBindingResource, SharedBuffer, SharedBufferBinding, SharedDevice, SharedQueue,
-    StorageBinding,
+    bind::{SharedBindingResource, SharedBufferBinding, StorageBinding},
+    SharedBuffer, SharedDevice, SharedQueue,
 };
 
 struct StorageBufferInner {

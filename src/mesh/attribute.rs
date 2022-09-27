@@ -1,4 +1,5 @@
 use glam::{IVec2, IVec3, IVec4, UVec2, UVec3, UVec4, Vec2, Vec3, Vec4};
+use wgpu::VertexFormat;
 
 #[derive(Clone, Debug)]
 pub enum MeshAttribute {
@@ -31,6 +32,23 @@ impl MeshAttribute {
             MeshAttribute::Uint32x2(v) => v.len(),
             MeshAttribute::Uint32x3(v) => v.len(),
             MeshAttribute::Uint32x4(v) => v.len(),
+        }
+    }
+
+    pub fn format(&self) -> VertexFormat {
+        match self {
+            MeshAttribute::Float32(_) => VertexFormat::Float32,
+            MeshAttribute::Float32x2(_) => VertexFormat::Float32x2,
+            MeshAttribute::Float32x3(_) => VertexFormat::Float32x3,
+            MeshAttribute::Float32x4(_) => VertexFormat::Float32x4,
+            MeshAttribute::Sint32(_) => VertexFormat::Sint32,
+            MeshAttribute::Sint32x2(_) => VertexFormat::Sint32x2,
+            MeshAttribute::Sint32x3(_) => VertexFormat::Sint32x3,
+            MeshAttribute::Sint32x4(_) => VertexFormat::Sint32x4,
+            MeshAttribute::Uint32(_) => VertexFormat::Uint32,
+            MeshAttribute::Uint32x2(_) => VertexFormat::Uint32x2,
+            MeshAttribute::Uint32x3(_) => VertexFormat::Uint32x3,
+            MeshAttribute::Uint32x4(_) => VertexFormat::Uint32x4,
         }
     }
 

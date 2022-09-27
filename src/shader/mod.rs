@@ -1,3 +1,6 @@
+mod io;
+mod processor;
+
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -7,7 +10,10 @@ use std::{
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use wgpu::{ShaderModule, ShaderSource};
 
-use crate::{ShaderIoError, SharedDevice};
+use crate::SharedDevice;
+
+pub use io::*;
+pub use processor::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DefaultShader {
@@ -38,6 +44,14 @@ impl ShaderRef {
         }
     }
 
+    pub fn language(&self) -> Result<ShaderLanguage, ShaderError> {
+        match self {
+            Self::Default(_) => Ok(ShaderLanguage::Wgsl),
+            Self::Path(path) => ShaderLanguage::from_path(path),
+            Self::Module(path) => ShaderLanguage::from_path(Path::new(path.as_ref())),
+        }
+    }
+
     pub fn path(&self) -> Option<PathBuf> {
         match self {
             Self::Default(_) => None,
@@ -51,6 +65,7 @@ impl ShaderRef {
     }
 }
 
+#[derive(Debug)]
 pub struct Shader {
     module: naga::Module,
     wgsl: String,
@@ -101,6 +116,13 @@ impl Shader {
         Self::rebind_modules(&mut self.module, &mut other.module)?;
 
         Ok(())
+    }
+
+    pub fn new(source: &str, language: ShaderLanguage) -> Result<Self, ShaderError> {
+        match language {
+            ShaderLanguage::Wgsl => Self::from_wgsl(source),
+            ShaderLanguage::Glsl => unimplemented!(),
+        }
     }
 
     pub fn from_wgsl(wgsl: &str) -> Result<Self, ShaderError> {

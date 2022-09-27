@@ -9,7 +9,11 @@ use wgpu::{
     BufferBindingType, RenderPass,
 };
 
-use crate::{Bind, BindingLayoutEntry, Shader, SharedBindingResource, SharedDevice, SharedQueue};
+use crate::{
+    bind::{Bind, BindingLayoutEntry, SharedBindingResource},
+    shader::Shader,
+    SharedDevice, SharedQueue,
+};
 
 #[derive(Debug)]
 pub struct BindingLocation {
@@ -131,11 +135,11 @@ impl BindingsLayout {
 struct BindingGroupEntry {
     resource: Option<SharedBindingResource>,
     binding: u32,
-    state: Box<dyn Any>,
+    state: Box<dyn Any + Send + Sync>,
 }
 
 impl BindingGroupEntry {
-    pub const fn new(binding: u32, state: Box<dyn Any>) -> Self {
+    pub const fn new(binding: u32, state: Box<dyn Any + Send + Sync>) -> Self {
         Self {
             resource: None,
             binding,

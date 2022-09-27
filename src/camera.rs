@@ -2,7 +2,7 @@ use encase::ShaderType;
 use glam::{Mat4, Vec3};
 use wgpu::TextureView;
 
-use crate::SharedTextureView;
+use crate::{renderer::RenderTarget, SharedTextureView};
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawCamera {
@@ -160,6 +160,7 @@ impl CameraTarget {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Camera {
     pub view: Mat4,
     pub projection: Projection,
@@ -227,6 +228,45 @@ impl Camera {
             position: self.view.w_axis.truncate(),
             view: self.view,
             view_proj: self.view_proj_aspect(aspect),
+        }
+    }
+
+    pub fn info(&self, main: &RenderTarget) -> CameraInfo {
+        CameraInfo {
+            view: self.view,
+            projection: self.projection,
+            width: self.target.get_width(main.width),
+            height: self.target.get_height(main.height),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CameraInfo {
+    pub view: Mat4,
+    pub projection: Projection,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl CameraInfo {
+    pub fn aspect_ratio(&self) -> f32 {
+        self.width as f32 / self.height as f32
+    }
+
+    pub fn proj(&self) -> Mat4 {
+        self.projection.projection_aspect(self.aspect_ratio())
+    }
+
+    pub fn view_proj(&self) -> Mat4 {
+        self.proj() * self.view.inverse()
+    }
+
+    pub fn raw(&self) -> RawCamera {
+        RawCamera {
+            position: self.view.w_axis.truncate(),
+            view: self.view,
+            view_proj: self.view_proj(),
         }
     }
 }

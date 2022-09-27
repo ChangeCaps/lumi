@@ -3,7 +3,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{DefaultShader, FsShaderIo, ShaderError, ShaderIo, ShaderRef};
+use crate::shader::{DefaultShader, ShaderError, ShaderRef};
+
+use super::{FsShaderIo, Shader, ShaderIo};
 
 const INCLUDE_DIRECTIVE: &str = "#include";
 
@@ -211,8 +213,10 @@ impl ShaderProcessor {
         }
     }
 
-    pub fn process(&mut self, shader_ref: ShaderRef) -> Result<String, ShaderError> {
+    pub fn process(&mut self, shader_ref: ShaderRef) -> Result<Shader, ShaderError> {
         let mut processed = String::new();
+
+        let shader_language = shader_ref.language()?;
 
         let mut stack: VecDeque<_> = vec![shader_ref].into();
         let mut included = Vec::new();
@@ -230,7 +234,7 @@ impl ShaderProcessor {
             let shader = self.get_cached_shader(
                 &shader_ref,
                 shader_ref.parent_path().as_deref(),
-                ShaderLanguage::Wgsl,
+                shader_language,
             )?;
 
             let mut can_include = true;
@@ -255,6 +259,6 @@ impl ShaderProcessor {
             included.push(shader_ref);
         }
 
-        Ok(processed)
+        Shader::new(&processed, shader_language)
     }
 }

@@ -1,12 +1,15 @@
 mod attribute;
+mod buffers;
 pub mod shape;
 
 use std::{collections::HashMap, sync::Arc};
 
 pub use attribute::*;
+pub use buffers::*;
+
 use glam::{Vec2, Vec3};
 
-use crate::MeshId;
+use crate::id::MeshId;
 
 /// A mesh is a collection of vertices and indices.
 ///
@@ -71,20 +74,30 @@ impl Mesh {
     }
 
     pub fn attribute<T: AsMeshAttribute + ?Sized>(&self, name: impl AsRef<str>) -> Option<&T> {
-        self.attributes
-            .get(name.as_ref())
-            .and_then(|attribute| T::as_mesh_attribute(attribute))
+        self.get_attribute(name.as_ref())
+            .and_then(T::as_mesh_attribute)
     }
 
     pub fn attribute_mut<T: AsMeshAttribute + ?Sized>(
         &mut self,
         name: impl AsRef<str>,
     ) -> Option<&mut T> {
+        self.get_attribute_mut(name.as_ref())
+            .and_then(T::as_mesh_attribute_mut)
+    }
+
+    pub fn get_attribute(&self, name: impl AsRef<str>) -> Option<&MeshAttribute> {
+        self.attributes
+            .get(name.as_ref())
+            .map(|attribute| attribute.as_ref())
+    }
+
+    pub fn get_attribute_mut(&mut self, name: impl AsRef<str>) -> Option<&mut MeshAttribute> {
         self.id = MeshId::new();
 
         self.attributes
             .get_mut(name.as_ref())
-            .and_then(|attribute| T::as_mesh_attribute_mut(Arc::make_mut(attribute)))
+            .map(|attribute| Arc::make_mut(attribute))
     }
 
     pub fn attributes(&self) -> impl Iterator<Item = (&str, &MeshAttribute)> {
@@ -167,6 +180,16 @@ impl Mesh {
         self.insert_attribute(Self::TANGENT, tangents);
 
         mikktspace::generate_tangents(self)
+    }
+
+    pub fn with_normals(mut self) -> Self {
+        self.generate_normals();
+        self
+    }
+
+    pub fn with_tangents(mut self) -> Self {
+        self.generate_tangents();
+        self
     }
 }
 

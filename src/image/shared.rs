@@ -10,9 +10,11 @@ use once_cell::sync::OnceCell;
 use wgpu::TextureFormat;
 
 use crate::{
-    DefaultSampler, DefaultTexture, ImageData, SamplerBinding, SharedBindingResource, SharedDevice,
-    SharedQueue, SharedSampler, SharedTexture, SharedTextureView, TextureBinding,
+    bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
+    SharedDevice, SharedQueue, SharedSampler, SharedTexture, SharedTextureView,
 };
+
+use super::ImageData;
 
 #[derive(Default)]
 struct ImageInner {

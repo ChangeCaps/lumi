@@ -1,4 +1,4 @@
-use crate::Mesh;
+use super::Mesh;
 
 pub fn cube(width: f32, height: f32, depth: f32) -> Mesh {
     let mut mesh = Mesh::new();

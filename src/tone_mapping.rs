@@ -1,4 +1,3 @@
-use lumi_macro::Bind;
 use wgpu::{
     AddressMode, BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, FilterMode,
     FragmentState, LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor,
@@ -6,8 +5,10 @@ use wgpu::{
 };
 
 use crate::{
-    Bindings, BindingsLayout, Shader, ShaderProcessor, ShaderRef, SharedDevice, SharedQueue,
-    SharedSampler, SharedTextureView,
+    bind::Bind,
+    binding::{Bindings, BindingsLayout},
+    shader::{ShaderProcessor, ShaderRef},
+    SharedDevice, SharedQueue, SharedSampler, SharedTextureView,
 };
 
 #[derive(Bind)]
@@ -26,15 +27,12 @@ pub struct ToneMapping {
 
 impl ToneMapping {
     pub fn new(device: &SharedDevice, shader_processor: &mut ShaderProcessor) -> Self {
-        let vertex = shader_processor
+        let mut vertex = shader_processor
             .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
             .unwrap();
-        let fragment = shader_processor
+        let mut fragment = shader_processor
             .process(ShaderRef::module("lumi/tonemapping_frag.wgsl"))
             .unwrap();
-
-        let mut vertex = Shader::from_wgsl(&vertex).unwrap();
-        let mut fragment = Shader::from_wgsl(&fragment).unwrap();
         vertex.rebind(&mut fragment).unwrap();
 
         let bindings_layout = BindingsLayout::new()

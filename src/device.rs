@@ -5,7 +5,7 @@ use wgpu::{
     BufferDescriptor, SamplerDescriptor, TextureDescriptor,
 };
 
-use crate::{DeviceId, SharedBuffer, SharedQueue, SharedSampler, SharedTexture};
+use crate::{id::DeviceId, SharedBuffer, SharedQueue, SharedSampler, SharedTexture};
 
 #[derive(Clone, Debug)]
 pub struct SharedDevice {
