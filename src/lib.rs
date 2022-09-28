@@ -50,5 +50,8 @@ pub mod prelude {
     pub use crate::material::{Material, MeshNode};
     pub use crate::mesh::{shape, Mesh};
     pub use crate::pbr::PbrMaterial;
+    pub use crate::renderer::RenderTarget;
+    pub use crate::shader::{Shader, ShaderRef};
     pub use crate::world::{Node, World};
+    pub use crate::{SharedDevice, SharedQueue};
 }

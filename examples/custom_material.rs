@@ -1,5 +1,6 @@
 mod util;
 
+use lumi::bind;
 use lumi::prelude::*;
 use winit::event::Event;
 
@@ -15,7 +16,11 @@ impl Material for CustomMaterial {
 fn main() {
     let mut world = World::new();
 
-    world.add_node(Node::new(CustomMaterial, shape::uv_sphere(1.0, 32)));
+    world.add(MeshNode::new(
+        CustomMaterial,
+        shape::uv_sphere(1.0, 32),
+        Mat4::IDENTITY,
+    ));
     world.add_light(DirectionalLight {
         direction: Vec3::new(-1.0, -1.0, 1.0),
         ..Default::default()
@@ -26,7 +31,12 @@ fn main() {
         Event::RedrawRequested(_) => {
             let target = surface.get_current_texture().unwrap();
             let view = target.texture.create_view(&Default::default());
-            renderer.render(&world, &view, size.width, size.height);
+            let render_target = RenderTarget {
+                view: &view,
+                width: size.width,
+                height: size.height,
+            };
+            renderer.render(&world, &render_target);
             target.present();
         }
         _ => (),

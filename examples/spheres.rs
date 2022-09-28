@@ -7,7 +7,9 @@ fn main() {
     let mut world = World::new();
 
     let node = world.add(MeshNode::new(
-        PbrMaterial::default(),
+        PbrMaterial {
+            ..Default::default()
+        },
         shape::cube(1.0, 1.0, 1.0),
         Mat4::IDENTITY,
     ));
