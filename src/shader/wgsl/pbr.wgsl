@@ -81,13 +81,10 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 		let l = directional_lights[i];
 		light += directional_light(l, roughness, ndotv, normal, view, reflect, f0, diffuse_color);
 	}
-	
-	let f = f_schlick3(f0, 1.0, ndotv) * (1.0 - roughness);
-	let kd = (1.0 - f) * (1.0 - metallic);
-	let env = environment(roughness, ndotv, reflect, f);
-	let ambient = env;
+		
+	let env = environment(metallic, roughness, ndotv, normal, reflect, f0);
 
-	light += ambient;
+	light += env;
 
 	var color = base_color.rgb * light + input.emissive;
 

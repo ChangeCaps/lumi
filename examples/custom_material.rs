@@ -27,7 +27,7 @@ fn main() {
     });
     world.add_camera(Camera::default().with_position(Vec3::new(0.0, 0.0, 5.0)));
 
-    util::framework(world, move |event, _renderer, _world| match event {
+    util::framework(world, move |event, _renderer, _world, _| match event {
         Event::RedrawRequested(_) => {}
         _ => (),
     });

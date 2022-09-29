@@ -35,7 +35,7 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 	pbr.metallic = metallic * metallic_roughness_texture.r;
 	pbr.roughness = roughness * metallic_roughness_texture.g;
 	pbr.reflectance = reflectance;
-	pbr.emissive = emissive_map.rgb * emissive;
+	pbr.emissive = emissive_map.rgb * emissive * 8.0;
 	pbr.normal_map = normalize(normal_map * 2.0 - 1.0);
 
 	return pbr_light(pbr);

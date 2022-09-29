@@ -1,0 +1,13 @@
+[package]
+name = "lumi-bake"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytemuck = "1.8"
+futures-lite = "1.12"
+image = "0.24"
+thiserror = "1.0"
+wgpu = "0.13"

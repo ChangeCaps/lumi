@@ -9,5 +9,5 @@ fn fragment(fs: Fullscreen) -> @location(0) vec4<f32> {
 	let w_direction = camera.view * vec4<f32>(normalize(direction), 0.0);
 	let direction = w_direction.xyz;
 
-	return textureSample(environment_diffuse, environment_sampler, direction);
+	return textureSampleLevel(environment_specular, environment_sampler, direction, 0.0);
 }

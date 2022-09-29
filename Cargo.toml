@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["lumi-macro"]
+members = ["lumi-macro", "lumi-bake"]
 
 [dev-dependencies]
 egui = "0.19.0"
@@ -17,7 +17,8 @@ futures-lite = "1.12"
 winit = "0.27"
 
 [dependencies]
-lumi-macro = { path = "lumi-macro", version = "0.1" }
+lumi-bake = { path = "lumi-bake", version = "0.1.0" }
+lumi-macro = { path = "lumi-macro", version = "0.1.0" }
 
 anyhow = "1.0"
 bytemuck = { version = "1.12", features = ["derive"] }

@@ -9,6 +9,8 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
+lumi-bake = { path = "../lumi-bake", version = "0.1.0" }
+
 proc-macro2 = "1.0"
 proc-macro-crate = "1.1"
 syn = "1.0"
