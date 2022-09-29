@@ -6,7 +6,7 @@ use wgpu::{
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
-    SharedDevice, SharedQueue, SharedSampler, SharedTexture, SharedTextureView,
+    Device, Queue, SharedDevice, SharedSampler, SharedTexture, SharedTextureView,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -61,7 +61,7 @@ impl ImageData {
         }
     }
 
-    pub fn write_texture(&self, queue: &SharedQueue, texture: &SharedTexture) {
+    pub fn write_texture(&self, queue: &Queue, texture: &SharedTexture) {
         if self.data.is_empty() {
             return;
         }
@@ -83,7 +83,7 @@ impl ImageData {
         );
     }
 
-    pub fn create_texture(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedTexture {
+    pub fn create_texture(&self, device: &Device, queue: &Queue) -> SharedTexture {
         let desc = wgpu::TextureDescriptor {
             label: None,
             size: self.size(),
@@ -103,12 +103,12 @@ impl ImageData {
         }
     }
 
-    pub fn create_view(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {
+    pub fn create_view(&self, device: &Device, queue: &Queue) -> SharedTextureView {
         self.create_texture(device, queue)
             .create_view(&Default::default())
     }
 
-    pub fn create_sampler(&self, device: &SharedDevice) -> SharedSampler {
+    pub fn create_sampler(&self, device: &Device) -> SharedSampler {
         let filter_mode = if self.filter {
             FilterMode::Linear
         } else {
@@ -128,8 +128,8 @@ impl TextureBinding for ImageData {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         if let Some(texture) = state {
@@ -157,8 +157,8 @@ impl SamplerBinding for ImageData {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        _queue: &SharedQueue,
+        device: &Device,
+        _queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         if let Some(sampler) = state {
@@ -177,13 +177,13 @@ impl SamplerBinding for ImageData {
 }
 
 impl DefaultTexture for ImageData {
-    fn default_texture(device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {
+    fn default_texture(device: &Device, queue: &Queue) -> SharedTextureView {
         Self::new(1, 1, vec![255; 4]).create_view(device, queue)
     }
 }
 
 impl DefaultSampler for ImageData {
-    fn default_sampler(device: &SharedDevice, _queue: &SharedQueue) -> SharedSampler {
+    fn default_sampler(device: &Device, _queue: &Queue) -> SharedSampler {
         device.create_shared_sampler(&Default::default())
     }
 }

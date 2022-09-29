@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
-use wgpu::{CommandEncoder, PipelineLayout, RenderPipeline, TextureView};
+use wgpu::{CommandEncoder, PipelineLayout, Queue, RenderPipeline, TextureView};
 
 use crate::{
     binding::BindingsLayout,
     bloom::Bloom,
     camera::{Camera, CameraInfo, CameraTarget},
+    environment::PreparedEnvironment,
     frame_buffer::FrameBuffer,
     id::{CameraId, NodeId},
     light::LightBindings,
@@ -14,7 +15,7 @@ use crate::{
     shader::{Shader, ShaderProcessor},
     tone_mapping::ToneMapping,
     world::World,
-    SharedDevice, SharedQueue,
+    Device,
 };
 
 #[allow(unused)]
@@ -64,7 +65,7 @@ pub struct PreparedCamera {
 
 impl PreparedCamera {
     fn new(
-        device: &SharedDevice,
+        device: &Device,
         shader_processor: &mut ShaderProcessor,
         camera: &Camera,
         target: &RenderTarget<'_>,
@@ -79,7 +80,7 @@ impl PreparedCamera {
         }
     }
 
-    fn prepare(&mut self, device: &SharedDevice, camera: &Camera, target: &RenderTarget<'_>) {
+    fn prepare(&mut self, device: &Device, camera: &Camera, target: &RenderTarget<'_>) {
         let width = camera.target.get_width(target.width);
         let height = camera.target.get_height(target.height);
         self.frame_buffer.resize(device, width, height);
@@ -88,16 +89,14 @@ impl PreparedCamera {
 }
 
 pub struct Renderer {
-    pub device: SharedDevice,
-    pub queue: SharedQueue,
     pub settings: RenderSettings,
-    resources: Resources,
+    pub resources: Resources,
     prepared_cameras: HashMap<CameraId, PreparedCamera>,
     tone_mapping: ToneMapping,
 }
 
 impl Renderer {
-    pub fn new(device: SharedDevice, queue: SharedQueue) -> Self {
+    pub fn new(device: &Device) -> Self {
         let mut shader_processor = ShaderProcessor::default();
         let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
@@ -105,8 +104,6 @@ impl Renderer {
         resources.insert(shader_processor);
 
         Self {
-            device,
-            queue,
             settings: RenderSettings::default(),
             resources,
             prepared_cameras: HashMap::new(),
@@ -114,36 +111,41 @@ impl Renderer {
         }
     }
 
-    pub const fn context(&self) -> RenderContext<'_> {
-        RenderContext {
-            device: &self.device,
-            queue: &self.queue,
-        }
-    }
-
-    pub fn register(&mut self, world: &World) {
-        let context = RenderContext {
-            device: &self.device,
-            queue: &self.queue,
-        };
-
+    pub fn register(&mut self, device: &Device, queue: &Queue, world: &World) {
         for dynamic_renderable in world.node_storage().dynamic_renderables() {
-            dynamic_renderable.register(&context, &mut self.resources);
+            dynamic_renderable.register(device, queue, &mut self.resources);
         }
     }
 
-    pub fn prepare_view(&mut self, world: &World, target: &RenderTarget, camera_id: CameraId) {
-        let context = RenderContext {
-            device: &self.device,
-            queue: &self.queue,
-        };
+    pub fn prepare_environment(&mut self, device: &Device, queue: &Queue, world: &World) {
+        if !self.resources.contains::<PreparedEnvironment>() {
+            let environment = world.environment();
+            let prepared_environment = PreparedEnvironment::new(device, queue, environment);
+            self.resources.insert(prepared_environment);
+        }
+    }
 
+    pub fn prepare_view(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        world: &World,
+        target: &RenderTarget,
+        camera_id: CameraId,
+    ) {
         let prepared_camera = self.prepared_cameras.get_mut(&camera_id).unwrap();
         let camera = world.camera(camera_id);
 
         self.resources.insert(camera.info(target));
 
         for (node_id, renderable) in world.iter_renderables() {
+            let context = RenderContext {
+                device,
+                queue,
+                view: camera_id,
+                node: node_id,
+            };
+
             let state = prepared_camera
                 .renderable_state
                 .entry(node_id)
@@ -164,48 +166,63 @@ impl Renderer {
         }
     }
 
-    pub fn prepare_cameras(&mut self, world: &World, target: &RenderTarget<'_>) {
+    pub fn prepare_cameras(&mut self, device: &Device, world: &World, target: &RenderTarget<'_>) {
         for (camera_id, camera) in world.iter_cameras() {
             if let Some(prepared_camera) = self.prepared_cameras.get_mut(&camera_id) {
-                prepared_camera.prepare(&self.device, camera, target);
+                prepared_camera.prepare(device, camera, target);
             } else {
                 let shader_processor = self.resources.get_mut_or_default::<ShaderProcessor>();
-                let camera = PreparedCamera::new(&self.device, shader_processor, camera, target);
+                let camera = PreparedCamera::new(device, shader_processor, camera, target);
 
                 self.prepared_cameras.insert(camera_id, camera);
             }
         }
     }
 
-    pub fn prepare(&mut self, world: &World, target: &RenderTarget<'_>) {
-        self.register(world);
+    pub fn prepare(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        world: &World,
+        target: &RenderTarget<'_>,
+    ) {
+        self.register(device, queue, world);
         self.prepare_lights(world);
-        self.prepare_cameras(world, target);
+        self.prepare_cameras(device, world, target);
+        self.prepare_environment(device, queue, world);
 
         for (camera_id, _camera) in world.iter_cameras() {
-            self.prepare_view(world, target, camera_id);
+            self.prepare_view(device, queue, world, target, camera_id);
         }
     }
 
     pub fn render_view(
         &mut self,
+        device: &Device,
+        queue: &Queue,
         world: &World,
         encoder: &mut CommandEncoder,
         target: &RenderTarget,
         camera_id: CameraId,
     ) {
-        let context = RenderContext {
-            device: &self.device,
-            queue: &self.queue,
-        };
+        log::trace!("Rendering view: {}", camera_id.uuid());
+        let view_start = Instant::now();
 
         let prepared_camera = self.prepared_cameras.get_mut(&camera_id).unwrap();
         let camera = world.camera(camera_id);
         let mut render_pass = prepared_camera.frame_buffer.begin_hdr_render_pass(encoder);
 
+        let t = Instant::now();
         self.resources.insert(camera.info(target));
 
         for (node_id, renderable) in world.iter_renderables() {
+            let context = RenderContext {
+                device,
+                queue,
+                view: camera_id,
+                node: node_id,
+            };
+
             let state = prepared_camera.renderable_state.get(&node_id).unwrap();
 
             unsafe {
@@ -214,34 +231,56 @@ impl Renderer {
         }
 
         drop(render_pass);
+        log::trace!("Main Pass took: {:?}", t.elapsed());
 
         self.resources.remove::<CameraInfo>();
 
         if self.settings.bloom_enabled {
+            let t = Instant::now();
             prepared_camera.bloom.render(
-                &self.device,
-                &self.queue,
+                device,
+                queue,
                 encoder,
                 &prepared_camera.frame_buffer.hdr_view,
                 self.settings.bloom_threshold,
                 self.settings.bloom_knee,
                 self.settings.bloom_scale,
             );
+            log::trace!("Bloom Pass took: {:?}", t.elapsed());
         }
 
+        let t = Instant::now();
         self.tone_mapping.run(
-            &self.device,
-            &self.queue,
+            device,
+            queue,
             encoder,
             &prepared_camera.frame_buffer.hdr_view,
             target.view,
         );
+        log::trace!("Tone Mapping Pass took: {:?}", t.elapsed());
+
+        log::trace!(
+            "Finished view: {} took: {:?}",
+            camera_id.uuid(),
+            view_start.elapsed()
+        );
     }
 
-    pub fn render(&mut self, world: &World, target: &RenderTarget<'_>) {
-        self.prepare(world, target);
+    pub fn render(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        world: &World,
+        target: &RenderTarget<'_>,
+    ) {
+        log::trace!("Starting Frame");
+        let start_frame = Instant::now();
 
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let start_prepare = Instant::now();
+        self.prepare(device, queue, world, target);
+        log::trace!("Preparation took: {:?}", start_prepare.elapsed());
+
+        let mut encoder = device.create_command_encoder(&Default::default());
 
         let mut sorted_cameras = world.iter_cameras().collect::<Vec<_>>();
         sorted_cameras.sort_unstable_by_key(|(_, camera)| camera.priority);
@@ -249,7 +288,7 @@ impl Renderer {
         for (camera_id, camera) in sorted_cameras.into_iter().rev() {
             match camera.target {
                 CameraTarget::Main => {
-                    self.render_view(world, &mut encoder, target, camera_id);
+                    self.render_view(device, queue, world, &mut encoder, target, camera_id);
                 }
                 CameraTarget::Texture(ref texture_view) => {
                     let target = RenderTarget {
@@ -258,11 +297,13 @@ impl Renderer {
                         height: texture_view.size().height,
                     };
 
-                    self.render_view(world, &mut encoder, &target, camera_id);
+                    self.render_view(device, queue, world, &mut encoder, &target, camera_id);
                 }
             }
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        queue.submit(std::iter::once(encoder.finish()));
+
+        log::trace!("Finished Frame took: {:?}", start_frame.elapsed());
     }
 }

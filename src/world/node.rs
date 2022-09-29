@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap};
 
-use wgpu::RenderPass;
+use wgpu::{Device, Queue, RenderPass};
 
 use crate::{
     id::NodeId,
@@ -142,8 +142,8 @@ pub struct RenderableNode<'a> {
 }
 
 impl<'a> RenderableNode<'a> {
-    pub fn register(&self, context: &RenderContext<'_>, resources: &mut Resources) {
-        self.renderable.register(context, resources);
+    pub fn register(&self, device: &Device, queue: &Queue, resources: &mut Resources) {
+        self.renderable.register(device, queue, resources);
     }
 
     pub fn init(

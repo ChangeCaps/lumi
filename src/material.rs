@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use glam::Mat4;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-    FragmentState, IndexFormat, MultisampleState, PipelineLayoutDescriptor, PrimitiveState,
-    RenderPass, RenderPipeline, RenderPipelineDescriptor, StencilState, TextureFormat,
+    Device, FragmentState, IndexFormat, MultisampleState, PipelineLayoutDescriptor, PrimitiveState,
+    Queue, RenderPass, RenderPipeline, RenderPipelineDescriptor, StencilState, TextureFormat,
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
@@ -12,6 +12,7 @@ use crate::{
     bind::Bind,
     binding::{Bindings, BindingsLayout},
     camera::{CameraInfo, RawCamera},
+    environment::{EnvironmentBindings, PreparedEnvironment},
     light::LightBindings,
     mesh::{Mesh, MeshBufferCache, MeshBuffers},
     renderable::{RenderContext, Renderable},
@@ -116,7 +117,7 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
     type Resource = MeshNodePipeline;
     type State = Vec<Bindings>;
 
-    fn register(context: &RenderContext<'_>, resources: &mut Resources) -> Self::Resource {
+    fn register(device: &Device, _queue: &Queue, resources: &mut Resources) -> Self::Resource {
         let shader_processor = resources.get_mut_or_default::<ShaderProcessor>();
 
         let vertex = shader_processor.process(T::vertex_shader()).unwrap();
@@ -140,18 +141,17 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
             .with_shader(&material_pipeline.fragment_shader)
             .bind::<MeshBindings>()
             .bind::<LightBindings>()
+            .bind::<EnvironmentBindings>()
             .bind::<T>();
 
-        let bind_group_layouts = layout.create_bind_group_layouts(&context.device);
+        let bind_group_layouts = layout.create_bind_group_layouts(device);
         let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
 
-        let pipeline_layout = context
-            .device
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &bind_group_layouts,
-                push_constant_ranges: &[],
-            });
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &bind_group_layouts,
+            push_constant_ranges: &[],
+        });
 
         let vertex_attributes = material_pipeline
             .vertices
@@ -176,44 +176,38 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
             })
             .collect::<Vec<_>>();
 
-        let render_pipeline = context
-            .device
-            .create_render_pipeline(&RenderPipelineDescriptor {
-                label: Some("Lumi MaterialPipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: VertexState {
-                    module: &material_pipeline
-                        .vertex_shader
-                        .shader_module(&context.device),
-                    entry_point: "vertex",
-                    buffers: &vertex_buffers,
-                },
-                fragment: Some(FragmentState {
-                    module: &material_pipeline
-                        .fragment_shader
-                        .shader_module(&context.device),
-                    entry_point: "fragment",
-                    targets: &[Some(ColorTargetState {
-                        format: TextureFormat::Rgba16Float,
-                        blend: Some(BlendState::ALPHA_BLENDING),
-                        write_mask: ColorWrites::ALL,
-                    })],
-                }),
-                primitive: PrimitiveState::default(),
-                depth_stencil: Some(DepthStencilState {
-                    format: TextureFormat::Depth32Float,
-                    depth_write_enabled: true,
-                    depth_compare: CompareFunction::Less,
-                    stencil: StencilState::default(),
-                    bias: DepthBiasState::default(),
-                }),
-                multisample: MultisampleState {
-                    count: 4,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
-                multiview: None,
-            });
+        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Lumi MaterialPipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &material_pipeline.vertex_shader.shader_module(device),
+                entry_point: "vertex",
+                buffers: &vertex_buffers,
+            },
+            fragment: Some(FragmentState {
+                module: &material_pipeline.fragment_shader.shader_module(device),
+                entry_point: "fragment",
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Rgba16Float,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
+            multisample: MultisampleState {
+                count: 4,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
 
         MeshNodePipeline {
             bindings_layout: layout,
@@ -260,6 +254,7 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
 
         let camera = resources.get::<CameraInfo>().unwrap();
         let light_bindings = resources.get::<LightBindings>().unwrap();
+        let prepared_environment = resources.get::<PreparedEnvironment>().unwrap();
 
         let mesh_bindings = MeshBindings {
             transform: self.transform,
@@ -269,6 +264,11 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
         for bindings in state.iter_mut() {
             bindings.bind(&context.device, &context.queue, &mesh_bindings);
             bindings.bind(&context.device, &context.queue, light_bindings);
+            bindings.bind(
+                &context.device,
+                &context.queue,
+                &prepared_environment.bindings(),
+            );
             bindings.update_bind_groups(&context.device);
         }
     }

@@ -1,6 +1,6 @@
 mod util;
 
-use lumi::{prelude::*, renderer::RenderTarget};
+use lumi::prelude::*;
 use winit::event::Event;
 
 fn main() {
@@ -20,21 +20,34 @@ fn main() {
     });
     world.add_camera(Camera::default().with_position(Vec3::new(0.0, 0.0, 5.0)));
 
-    util::framework(move |event, renderer, surface, size| match event {
+    util::framework(world, move |event, _renderer, world, ctx| match event {
         Event::RedrawRequested(_) => {
             let node = world.node_mut::<MeshNode<PbrMaterial>>(node);
             node.transform *= Mat4::from_rotation_y(0.01);
 
-            let target = surface.get_current_texture().unwrap();
-            let view = target.texture.create_view(&Default::default());
-            let render_target = RenderTarget {
-                view: &view,
-                width: size.width,
-                height: size.height,
-            };
-            renderer.render(&world, &render_target);
-            target.present();
+            let material = &mut node.primitives[0].material;
+
+            egui::Window::new("Material Properties").show(ctx, |ui| {
+                egui::Grid::new("material_grid").show(ui, |ui| {
+                    ui.label("Base Color");
+                    egui::color_picker::color_edit_button_rgba(
+                        ui,
+                        bytemuck::cast_mut(&mut material.base_color),
+                        egui::color_picker::Alpha::Opaque,
+                    );
+                    ui.end_row();
+                    ui.label("Metallic");
+                    ui.add(egui::Slider::new(&mut material.metallic, 0.0..=1.0));
+                    ui.end_row();
+                    ui.label("Roughness");
+                    ui.add(egui::Slider::new(&mut material.roughness, 0.0..=1.0));
+                    ui.end_row();
+                    ui.label("Emissive");
+                    ui.color_edit_button_rgb(bytemuck::cast_mut(&mut material.emissive));
+                    ui.end_row();
+                })
+            });
         }
-        _ => (),
+        _ => {}
     });
 }

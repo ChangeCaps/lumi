@@ -4,7 +4,7 @@ use wgpu::{
     TextureFormat, TextureUsages,
 };
 
-use crate::{SharedDevice, SharedTexture, SharedTextureView};
+use crate::{Device, SharedDevice, SharedTexture, SharedTextureView};
 
 #[derive(Clone, Debug)]
 pub struct FrameBuffer {
@@ -17,7 +17,7 @@ pub struct FrameBuffer {
 }
 
 impl FrameBuffer {
-    pub fn new(device: &SharedDevice, width: u32, height: u32, sample_count: u32) -> Self {
+    pub fn new(device: &Device, width: u32, height: u32, sample_count: u32) -> Self {
         let hdr = device.create_shared_texture(&TextureDescriptor {
             label: Some("Lumi HDR Target"),
             size: Extent3d {
@@ -80,7 +80,7 @@ impl FrameBuffer {
         }
     }
 
-    pub fn set_sample_count(&mut self, device: &SharedDevice, sample_count: u32) {
+    pub fn set_sample_count(&mut self, device: &Device, sample_count: u32) {
         if self.sample_count() != sample_count {
             self.depth = device.create_shared_texture(&TextureDescriptor {
                 label: Some("Lumi Depth Target"),
@@ -140,7 +140,7 @@ impl FrameBuffer {
         self.width() as f32 / self.height() as f32
     }
 
-    pub fn resize(&mut self, device: &SharedDevice, width: u32, height: u32) {
+    pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         if self.width() != width || self.height() != height {
             *self = Self::new(device, width, height, self.sample_count());
         }

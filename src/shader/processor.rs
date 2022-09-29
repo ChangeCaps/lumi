@@ -170,6 +170,7 @@ impl ShaderProcessor {
         add_module!("tonemapping.wgsl", "wgsl/tonemapping.wgsl");
         add_module!("pbr_material.wgsl", "wgsl/pbr_material.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
+        add_module!("environment.wgsl", "wgsl/environment.wgsl");
 
         add_module!("pbr_light.wgsl", "wgsl/pbr_light.wgsl");
         add_module!("fullscreen_vert.wgsl", "wgsl/fullscreen_vert.wgsl");

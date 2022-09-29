@@ -15,7 +15,7 @@ use wgpu::{
 
 pub use lumi_macro::Bind;
 
-use crate::{SharedBuffer, SharedDevice, SharedQueue, SharedSampler, SharedTextureView};
+use crate::{Device, Queue, SharedBuffer, SharedDevice, SharedSampler, SharedTextureView};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SharedBufferBinding {
@@ -61,40 +61,40 @@ pub trait Bind {
 
     fn get_uniform(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         name: &str,
         state: &mut dyn Any,
     ) -> Option<SharedBindingResource>;
 
     fn get_storage(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         name: &str,
         state: &mut dyn Any,
     ) -> Option<SharedBindingResource>;
 
     fn get_texture(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         name: &str,
         state: &mut dyn Any,
     ) -> Option<SharedBindingResource>;
 
     fn get_storage_texture(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         name: &str,
         state: &mut dyn Any,
     ) -> Option<SharedBindingResource>;
 
     fn get_sampler(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         name: &str,
         state: &mut dyn Any,
     ) -> Option<SharedBindingResource>;
@@ -136,8 +136,8 @@ pub trait UniformBinding {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource;
 }
@@ -158,8 +158,8 @@ pub trait StorageBinding {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource;
 }
@@ -180,8 +180,8 @@ pub trait TextureBinding {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource;
 }
@@ -202,8 +202,8 @@ pub trait StorageTextureBinding {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource;
 }
@@ -211,23 +211,17 @@ pub trait StorageTextureBinding {
 pub trait SamplerBinding {
     type State: Any + Default;
 
-    fn entry(filtering: bool) -> BindLayoutEntry {
-        let ty = if filtering {
-            SamplerBindingType::Filtering
-        } else {
-            SamplerBindingType::NonFiltering
-        };
-
+    fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
-            ty: BindingType::Sampler(ty),
+            ty: BindingType::Sampler(SamplerBindingType::Filtering),
             count: None,
         }
     }
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource;
 }
@@ -247,7 +241,7 @@ impl<T: Default, U> Default for DefaultBindingState<T, U> {
 }
 
 pub trait DefaultTexture {
-    fn default_texture(device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView;
+    fn default_texture(device: &Device, queue: &Queue) -> SharedTextureView;
 }
 
 impl<T: TextureBinding + DefaultTexture> TextureBinding for Option<T> {
@@ -255,8 +249,8 @@ impl<T: TextureBinding + DefaultTexture> TextureBinding for Option<T> {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         match self {
@@ -273,7 +267,7 @@ impl<T: TextureBinding + DefaultTexture> TextureBinding for Option<T> {
 }
 
 pub trait DefaultSampler {
-    fn default_sampler(device: &SharedDevice, queue: &SharedQueue) -> SharedSampler;
+    fn default_sampler(device: &Device, queue: &Queue) -> SharedSampler;
 }
 
 impl<T: SamplerBinding + DefaultSampler> SamplerBinding for Option<T> {
@@ -281,8 +275,8 @@ impl<T: SamplerBinding + DefaultSampler> SamplerBinding for Option<T> {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         match self {
@@ -314,8 +308,8 @@ impl<T: ShaderType + WriteInto> UniformBinding for T {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         let mut data = encase::UniformBuffer::new(Vec::<u8>::new());

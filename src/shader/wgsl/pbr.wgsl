@@ -2,6 +2,7 @@
 #include <lumi/camera.wgsl>
 #include <lumi/light.wgsl>
 #include <lumi/pbr_light.wgsl>
+#include <lumi/environment.wgsl>
 
 @group(0) @binding(3)
 var<storage, read> point_lights: array<PointLight>;
@@ -64,7 +65,7 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 
 	let ndotv = max(dot(normal, view), 0.0001);
 	let f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color.rgb * metallic;
-	let reflect = reflect(-view, normal);
+	let reflect = reflect(-view, input.w_normal);
 
 	let diffuse_color = base_color.rgb * (1.0 - metallic);
 
@@ -80,12 +81,13 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 		light += directional_light(l, roughness, ndotv, normal, view, reflect, f0, diffuse_color);
 	}
 
-	let ambient_diffuse = EnvBRDFApprox(diffuse_color, 1.0, ndotv);
+	let env_diffuse = textureSample(environment_diffuse, environment_sampler, reflect);
+	let ambient_diffuse = env_diffuse.rgb;
 	let ambient_specular = EnvBRDFApprox(f0, perceptual_roughness, ndotv);
 	let ambient_light = ambient_diffuse + ambient_specular;
-	light += ambient_light * 0.1;
+	light += ambient_light * 0.2;
 
 	var color = base_color.rgb * light + input.emissive;
 
-	return vec4<f32>(color, 1.0);
+	return vec4<f32>(ambient_diffuse, 1.0);
 }

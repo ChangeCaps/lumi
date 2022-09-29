@@ -8,7 +8,7 @@ use wgpu::BufferUsages;
 
 use crate::{
     bind::{SharedBindingResource, SharedBufferBinding, UniformBinding},
-    SharedBuffer, SharedDevice, SharedQueue,
+    Device, Queue, SharedBuffer, SharedDevice,
 };
 
 struct UniformBufferInner {
@@ -44,7 +44,7 @@ where
         data.into_inner()
     }
 
-    pub fn buffer(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedBuffer {
+    pub fn buffer(&self, device: &Device, queue: &Queue) -> SharedBuffer {
         let mut inner = self.inner.lock().unwrap();
 
         if let Some(inner) = inner.as_mut() {
@@ -98,8 +98,8 @@ where
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         _state: &mut Self::State,
     ) -> SharedBindingResource {
         SharedBindingResource::Buffer(SharedBufferBinding {
@@ -118,8 +118,8 @@ where
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         _state: &mut Self::State,
     ) -> SharedBindingResource {
         (*self).binding(device, queue, _state)

@@ -10,7 +10,7 @@ use std::{
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use wgpu::{ShaderModule, ShaderSource};
 
-use crate::SharedDevice;
+use crate::Device;
 
 pub use io::*;
 pub use processor::*;
@@ -135,7 +135,7 @@ impl Shader {
         })
     }
 
-    pub fn compile(&mut self, device: &SharedDevice) -> Result<(), ShaderError> {
+    pub fn compile(&mut self, device: &Device) -> Result<(), ShaderError> {
         let mut validator = Validator::new(ValidationFlags::all(), Capabilities::empty());
         let module_info = validator.validate(&self.module)?;
 
@@ -159,14 +159,14 @@ impl Shader {
         self.shader_module.as_ref()
     }
 
-    pub fn create_shader_module(&self, device: &SharedDevice) -> ShaderModule {
+    pub fn create_shader_module(&self, device: &Device) -> ShaderModule {
         device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: ShaderSource::Wgsl(Cow::Borrowed(&self.wgsl)),
         })
     }
 
-    pub fn shader_module(&mut self, device: &SharedDevice) -> &ShaderModule {
+    pub fn shader_module(&mut self, device: &Device) -> &ShaderModule {
         if self.shader_module.is_none() {
             self.compile(device).unwrap();
         }

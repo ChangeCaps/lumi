@@ -12,7 +12,7 @@ use wgpu::{
 use crate::{
     bind::{Bind, BindingLayoutEntry, SharedBindingResource},
     shader::Shader,
-    SharedDevice, SharedQueue,
+    Device, Queue,
 };
 
 #[derive(Debug)]
@@ -74,7 +74,7 @@ impl BindingsLayout {
         self
     }
 
-    pub fn create_bind_group_layouts(&self, device: &SharedDevice) -> Vec<BindGroupLayout> {
+    pub fn create_bind_group_layouts(&self, device: &Device) -> Vec<BindGroupLayout> {
         let mut entries: Vec<Vec<BindGroupLayoutEntry>> = Vec::new();
 
         for entry in self.entries.iter() {
@@ -107,7 +107,7 @@ impl BindingsLayout {
             .collect()
     }
 
-    pub fn create_bindings(&self, device: &SharedDevice) -> Bindings {
+    pub fn create_bindings(&self, device: &Device) -> Bindings {
         let mut groups: Vec<BindingGroup> = self
             .create_bind_group_layouts(device)
             .into_iter()
@@ -191,7 +191,7 @@ struct BindingGroup {
 
 impl BindingGroup {
     #[track_caller]
-    pub fn create_bind_group(&self, device: &SharedDevice) -> BindGroup {
+    pub fn create_bind_group(&self, device: &Device) -> BindGroup {
         let mut entries = Vec::with_capacity(self.bindings.len());
 
         for (name, entry) in self.bindings.iter() {
@@ -221,7 +221,7 @@ pub struct Bindings {
 }
 
 impl Bindings {
-    pub fn new(device: &SharedDevice, layout: &BindingsLayout) -> Self {
+    pub fn new(device: &Device, layout: &BindingsLayout) -> Self {
         layout.create_bindings(device)
     }
 
@@ -230,7 +230,7 @@ impl Bindings {
     }
 
     #[track_caller]
-    pub fn bind<T>(&mut self, device: &SharedDevice, queue: &SharedQueue, bind: &T)
+    pub fn bind<T>(&mut self, device: &Device, queue: &Queue, bind: &T)
     where
         T: Bind + ?Sized,
     {
@@ -268,7 +268,7 @@ impl Bindings {
         }
     }
 
-    pub fn update_bind_groups(&mut self, device: &SharedDevice) {
+    pub fn update_bind_groups(&mut self, device: &Device) {
         for group in self.groups.iter_mut() {
             if group.bind_group.is_none() {
                 group.bind_group = Some(group.create_bind_group(device));

@@ -2,14 +2,14 @@ use std::{ops::Deref, sync::Arc};
 
 use once_cell::sync::OnceCell;
 use wgpu::{
-    Extent3d, FilterMode, SamplerDescriptor, TextureAspect, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureViewDescriptor,
+    Device, Extent3d, FilterMode, Queue, SamplerDescriptor, TextureAspect, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 
 use crate::{
-    bind::{SamplerBinding, SharedBindingResource, TextureBinding},
+    bind::{SamplerBinding, SharedBindingResource, StorageTextureBinding, TextureBinding},
     id::{TextureId, TextureViewId},
-    SharedDevice, SharedQueue, SharedSampler,
+    SharedDevice, SharedSampler,
 };
 
 #[derive(Clone, Debug)]
@@ -207,8 +207,8 @@ impl TextureBinding for SharedTextureView {
 
     fn binding(
         &self,
-        _device: &SharedDevice,
-        _queue: &SharedQueue,
+        _device: &Device,
+        _queue: &Queue,
         _state: &mut Self::State,
     ) -> SharedBindingResource {
         SharedBindingResource::TextureView(self.clone())
@@ -220,11 +220,37 @@ impl TextureBinding for &SharedTextureView {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         TextureBinding::binding(*self, device, queue, state)
+    }
+}
+
+impl StorageTextureBinding for SharedTextureView {
+    type State = ();
+
+    fn binding(
+        &self,
+        _device: &Device,
+        _queue: &Queue,
+        _state: &mut Self::State,
+    ) -> SharedBindingResource {
+        SharedBindingResource::TextureView(self.clone())
+    }
+}
+
+impl StorageTextureBinding for &SharedTextureView {
+    type State = ();
+
+    fn binding(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        state: &mut Self::State,
+    ) -> SharedBindingResource {
+        StorageTextureBinding::binding(*self, device, queue, state)
     }
 }
 
@@ -233,8 +259,8 @@ impl SamplerBinding for SharedTextureView {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        _queue: &SharedQueue,
+        device: &Device,
+        _queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         let sampler = state.get_or_init(|| {
@@ -254,8 +280,8 @@ impl SamplerBinding for &SharedTextureView {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         SamplerBinding::binding(*self, device, queue, state)

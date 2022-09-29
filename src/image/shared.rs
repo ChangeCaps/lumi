@@ -11,7 +11,7 @@ use wgpu::TextureFormat;
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
-    SharedDevice, SharedQueue, SharedSampler, SharedTexture, SharedTextureView,
+    Device, Queue, SharedSampler, SharedTexture, SharedTextureView,
 };
 
 use super::ImageData;
@@ -73,7 +73,7 @@ impl Image {
         &mut inner.image
     }
 
-    pub fn texture_view(&self, device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {
+    pub fn texture_view(&self, device: &Device, queue: &Queue) -> SharedTextureView {
         let texture = self
             .inner
             .view
@@ -120,8 +120,8 @@ impl TextureBinding for Image {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         _state: &mut Self::State,
     ) -> SharedBindingResource {
         SharedBindingResource::TextureView(self.texture_view(device, queue))
@@ -133,8 +133,8 @@ impl SamplerBinding for Image {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         SamplerBinding::binding(&self.inner.image, device, queue, state)
@@ -142,13 +142,13 @@ impl SamplerBinding for Image {
 }
 
 impl DefaultTexture for Image {
-    fn default_texture(device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {
+    fn default_texture(device: &Device, queue: &Queue) -> SharedTextureView {
         ImageData::default_texture(device, queue)
     }
 }
 
 impl DefaultSampler for Image {
-    fn default_sampler(device: &SharedDevice, queue: &SharedQueue) -> SharedSampler {
+    fn default_sampler(device: &Device, queue: &Queue) -> SharedSampler {
         ImageData::default_sampler(device, queue)
     }
 }

@@ -9,6 +9,10 @@ edition = "2021"
 members = ["lumi-macro"]
 
 [dev-dependencies]
+egui = "0.19.0"
+egui_wgpu_backend = "0.19"
+egui_winit_platform = "0.16"
+env_logger = "0.9"
 futures-lite = "1.12"
 winit = "0.27"
 
@@ -20,6 +24,7 @@ bytemuck = { version = "1.12", features = ["derive"] }
 encase = { version = "0.3", features = ["glam"] }
 glam = { version = "0.21", features = ["bytemuck"] }
 image = { version = "0.24", optional = true }
+log = "0.4"
 mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
 naga = { version = "0.9", features = ["glsl-in", "wgsl-out"] }
 once_cell = "1.15"

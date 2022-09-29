@@ -8,7 +8,7 @@ use crate::{
     bind::Bind,
     binding::{Bindings, BindingsLayout},
     shader::{ShaderProcessor, ShaderRef},
-    SharedDevice, SharedQueue, SharedSampler, SharedTextureView,
+    Device, Queue, SharedDevice, SharedSampler, SharedTextureView,
 };
 
 #[derive(Bind)]
@@ -26,7 +26,7 @@ pub struct ToneMapping {
 }
 
 impl ToneMapping {
-    pub fn new(device: &SharedDevice, shader_processor: &mut ShaderProcessor) -> Self {
+    pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
         let mut vertex = shader_processor
             .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
             .unwrap();
@@ -90,8 +90,8 @@ impl ToneMapping {
 
     pub fn run(
         &mut self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         encoder: &mut CommandEncoder,
         hdr: &SharedTextureView,
         target: &TextureView,

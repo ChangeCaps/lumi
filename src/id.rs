@@ -35,6 +35,7 @@ ids! {
     pub struct TextureViewId;
     pub struct SamplerId;
     pub struct ShaderId;
+    pub struct EnvironmentId;
     pub struct MeshId;
     pub struct NodeId;
     pub struct LightId;

@@ -8,12 +8,14 @@ pub use transform::*;
 
 use crate::{
     camera::Camera,
+    environment::Environment,
     id::{CameraId, LightId, NodeId},
     light::{AsLight, Light},
     renderable::Renderable,
 };
 
 pub struct World {
+    environment: Environment,
     nodes: NodeStorage,
     lights: HashMap<LightId, Light>,
     cameras: HashMap<CameraId, Camera>,
@@ -22,10 +24,15 @@ pub struct World {
 impl World {
     pub fn new() -> Self {
         Self {
+            environment: Environment::default(),
             nodes: NodeStorage::new(),
             lights: HashMap::new(),
             cameras: HashMap::new(),
         }
+    }
+
+    pub fn environment(&self) -> &Environment {
+        &self.environment
     }
 
     pub fn iter_nodes(&self) -> impl Iterator<Item = (NodeId, &dyn Node)> {

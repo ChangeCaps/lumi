@@ -27,18 +27,8 @@ fn main() {
     });
     world.add_camera(Camera::default().with_position(Vec3::new(0.0, 0.0, 5.0)));
 
-    util::framework(move |event, renderer, surface, size| match event {
-        Event::RedrawRequested(_) => {
-            let target = surface.get_current_texture().unwrap();
-            let view = target.texture.create_view(&Default::default());
-            let render_target = RenderTarget {
-                view: &view,
-                width: size.width,
-                height: size.height,
-            };
-            renderer.render(&world, &render_target);
-            target.present();
-        }
+    util::framework(world, move |event, _renderer, _world| match event {
+        Event::RedrawRequested(_) => {}
         _ => (),
     });
 }

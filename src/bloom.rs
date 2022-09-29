@@ -12,7 +12,7 @@ use crate::{
     bind::Bind,
     binding::{Bindings, BindingsLayout},
     shader::{ShaderProcessor, ShaderRef},
-    SharedDevice, SharedQueue, SharedTexture, SharedTextureView,
+    Device, Queue, SharedDevice, SharedTexture, SharedTextureView,
 };
 
 struct MipChain {
@@ -22,7 +22,7 @@ struct MipChain {
 }
 
 impl MipChain {
-    pub fn new(device: &SharedDevice, layout: &BindingsLayout, width: u32, height: u32) -> Self {
+    pub fn new(device: &Device, layout: &BindingsLayout, width: u32, height: u32) -> Self {
         let mip_level_count = Self::mip_levels_for_size(width, height);
         let texture = device.create_shared_texture(&wgpu::TextureDescriptor {
             label: Some("Lumi MipChain texture"),
@@ -143,7 +143,7 @@ pub struct Bloom {
 
 impl Bloom {
     pub fn new(
-        device: &SharedDevice,
+        device: &Device,
         shader_processor: &mut ShaderProcessor,
         width: u32,
         height: u32,
@@ -252,7 +252,7 @@ impl Bloom {
         }
     }
 
-    pub fn resize(&mut self, device: &SharedDevice, width: u32, height: u32) {
+    pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         if self.down.width() != width || self.down.height() != height {
             self.down = MipChain::new(device, &self.down_layout, width, height);
             self.up = MipChain::new(device, &self.up_layout, width, height);
@@ -261,8 +261,8 @@ impl Bloom {
 
     pub fn render(
         &mut self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         encoder: &mut CommandEncoder,
         source: &SharedTextureView,
         threshold: f32,

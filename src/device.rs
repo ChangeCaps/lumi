@@ -1,69 +1,51 @@
-use std::{ops::Deref, sync::Arc};
-
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BufferDescriptor, SamplerDescriptor, TextureDescriptor,
+    BufferDescriptor, Device, Queue, SamplerDescriptor, TextureDescriptor,
 };
 
-use crate::{id::DeviceId, SharedBuffer, SharedQueue, SharedSampler, SharedTexture};
+use crate::{SharedBuffer, SharedSampler, SharedTexture};
 
-#[derive(Clone, Debug)]
-pub struct SharedDevice {
-    device: Arc<wgpu::Device>,
-    id: DeviceId,
+pub trait SharedDevice {
+    fn create_shared_buffer(&self, desc: &BufferDescriptor) -> SharedBuffer;
+    fn create_shared_buffer_init(&self, desc: &BufferInitDescriptor) -> SharedBuffer;
+    fn create_shared_texture(&self, desc: &TextureDescriptor) -> SharedTexture;
+    fn create_shared_texture_with_data(
+        &self,
+        queue: &Queue,
+        desc: &TextureDescriptor,
+        data: &[u8],
+    ) -> SharedTexture;
+    fn create_shared_sampler(&self, desc: &SamplerDescriptor) -> SharedSampler;
 }
 
-impl SharedDevice {
-    pub fn new(device: wgpu::Device) -> Self {
-        Self {
-            device: Arc::new(device),
-            id: DeviceId::new(),
-        }
-    }
-
-    pub fn create_shared_buffer(&self, desc: &BufferDescriptor) -> SharedBuffer {
-        let buffer = self.device.create_buffer(desc);
+impl SharedDevice for Device {
+    fn create_shared_buffer(&self, desc: &BufferDescriptor) -> SharedBuffer {
+        let buffer = self.create_buffer(desc);
         SharedBuffer::new(buffer, desc.size, desc.usage)
     }
 
-    pub fn create_shared_buffer_init(&self, desc: &BufferInitDescriptor) -> SharedBuffer {
-        let buffer = self.device.create_buffer_init(desc);
+    fn create_shared_buffer_init(&self, desc: &BufferInitDescriptor) -> SharedBuffer {
+        let buffer = self.create_buffer_init(desc);
         SharedBuffer::new(buffer, desc.contents.len() as u64, desc.usage)
     }
 
-    pub fn create_shared_texture(&self, desc: &TextureDescriptor) -> SharedTexture {
-        let texture = self.device.create_texture(desc);
+    fn create_shared_texture(&self, desc: &TextureDescriptor) -> SharedTexture {
+        let texture = self.create_texture(desc);
         SharedTexture::new(texture, desc)
     }
 
-    pub fn create_shared_texture_with_data(
+    fn create_shared_texture_with_data(
         &self,
-        queue: &SharedQueue,
+        queue: &Queue,
         desc: &TextureDescriptor,
         data: &[u8],
     ) -> SharedTexture {
-        let texture = self.device.create_texture_with_data(queue, desc, data);
+        let texture = self.create_texture_with_data(queue, desc, data);
         SharedTexture::new(texture, desc)
     }
 
-    pub fn create_shared_sampler(&self, desc: &SamplerDescriptor) -> SharedSampler {
-        let sampler = self.device.create_sampler(desc);
+    fn create_shared_sampler(&self, desc: &SamplerDescriptor) -> SharedSampler {
+        let sampler = self.create_sampler(desc);
         SharedSampler::new(sampler, desc)
-    }
-
-    pub fn device(&self) -> &wgpu::Device {
-        &self.device
-    }
-
-    pub fn id(&self) -> DeviceId {
-        self.id
-    }
-}
-
-impl Deref for SharedDevice {
-    type Target = wgpu::Device;
-
-    fn deref(&self) -> &Self::Target {
-        self.device()
     }
 }

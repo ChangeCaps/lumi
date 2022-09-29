@@ -5,7 +5,7 @@ use wgpu::{AddressMode, CompareFunction, FilterMode, SamplerBorderColor};
 use crate::{
     bind::{SamplerBinding, SharedBindingResource},
     id::SamplerId,
-    SharedDevice, SharedQueue,
+    Device, Queue,
 };
 
 #[derive(Clone, Debug)]
@@ -120,8 +120,8 @@ impl SamplerBinding for SharedSampler {
 
     fn binding(
         &self,
-        _device: &SharedDevice,
-        _queue: &SharedQueue,
+        _device: &Device,
+        _queue: &Queue,
         _state: &mut Self::State,
     ) -> SharedBindingResource {
         SharedBindingResource::Sampler(self.clone())
@@ -133,8 +133,8 @@ impl SamplerBinding for &SharedSampler {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         SamplerBinding::binding(*self, device, queue, state)

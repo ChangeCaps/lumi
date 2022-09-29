@@ -1,14 +1,18 @@
 use wgpu::RenderPass;
 
 use crate::{
+    id::{CameraId, NodeId},
     resources::{Resource, Resources},
     world::Node,
-    SharedDevice, SharedQueue,
+    Device, Queue,
 };
 
+#[derive(Clone, Copy, Debug)]
 pub struct RenderContext<'a> {
-    pub device: &'a SharedDevice,
-    pub queue: &'a SharedQueue,
+    pub device: &'a Device,
+    pub queue: &'a Queue,
+    pub view: CameraId,
+    pub node: NodeId,
 }
 
 #[allow(unused_variables)]
@@ -16,7 +20,7 @@ pub trait Renderable: Node {
     type Resource: Resource;
     type State: Resource;
 
-    fn register(context: &RenderContext<'_>, resources: &mut Resources) -> Self::Resource;
+    fn register(device: &Device, queue: &Queue, resources: &mut Resources) -> Self::Resource;
     fn init(context: &RenderContext<'_>, resource: &Self::Resource) -> Self::State;
     fn prepare(
         &self,
@@ -41,7 +45,7 @@ pub struct RenderableResource<T: Renderable> {
 }
 
 pub struct DynamicRenderable {
-    register: fn(&RenderContext<'_>, &mut Resources),
+    register: fn(&Device, &Queue, &mut Resources),
     init: fn(&RenderContext<'_>, &Resources) -> Box<dyn Resource>,
     prepare: unsafe fn(&dyn Node, &RenderContext<'_>, &mut Resources, &mut dyn Resource),
     render: for<'a> unsafe fn(
@@ -56,9 +60,9 @@ pub struct DynamicRenderable {
 impl DynamicRenderable {
     pub fn new<T: Renderable>() -> Self {
         Self {
-            register: |context, resources| {
+            register: |device, queue, resources| {
                 if !resources.contains::<RenderableResource<T>>() {
-                    let resource = T::register(context, resources);
+                    let resource = T::register(device, queue, resources);
                     let resource = RenderableResource::<T> { resource };
                     resources.insert(resource);
                 }
@@ -92,8 +96,8 @@ impl DynamicRenderable {
         }
     }
 
-    pub fn register(&self, context: &RenderContext<'_>, resources: &mut Resources) {
-        (self.register)(context, resources);
+    pub fn register(&self, device: &Device, queue: &Queue, resources: &mut Resources) {
+        (self.register)(device, queue, resources);
     }
 
     pub fn init(&self, context: &RenderContext<'_>, resources: &Resources) -> Box<dyn Resource> {

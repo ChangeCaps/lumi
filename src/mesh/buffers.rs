@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wgpu::{util::BufferInitDescriptor, BufferUsages};
+use wgpu::{util::BufferInitDescriptor, BufferUsages, Device};
 
 use crate::{id::MeshId, SharedBuffer, SharedDevice};
 
@@ -13,7 +13,7 @@ pub struct MeshBuffers {
 }
 
 impl MeshBuffers {
-    pub fn new(device: &SharedDevice, mesh: &Mesh) -> Self {
+    pub fn new(device: &Device, mesh: &Mesh) -> Self {
         let mut attributes = HashMap::new();
         for (name, attribute) in &mesh.attributes {
             let buffer = device.create_shared_buffer_init(&BufferInitDescriptor {
@@ -49,7 +49,7 @@ impl MeshBufferCache {
         self.buffers.contains_key(&mesh.id())
     }
 
-    pub fn prepare(&mut self, device: &SharedDevice, mesh: &Mesh) {
+    pub fn prepare(&mut self, device: &Device, mesh: &Mesh) {
         if !self.buffers.contains_key(&mesh.id()) {
             self.buffers
                 .insert(mesh.id(), MeshBuffers::new(device, mesh));

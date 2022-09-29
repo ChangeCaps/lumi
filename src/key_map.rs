@@ -73,8 +73,16 @@ impl<T> KeyMap<T> {
         Self::default()
     }
 
+    pub fn contains(&self, key: &dyn Key) -> bool {
+        self.map.contains_key(key)
+    }
+
     pub fn insert<K: Key>(&mut self, key: K, value: T) -> Option<T> {
         self.map.insert(Box::new(key), value)
+    }
+
+    pub fn insert_boxed(&mut self, key: Box<dyn Key>, value: T) -> Option<T> {
+        self.map.insert(key, value)
     }
 
     pub fn remove(&mut self, key: &dyn Key) -> Option<T> {

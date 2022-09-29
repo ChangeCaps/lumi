@@ -4,7 +4,7 @@ use wgpu::TextureFormat;
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
-    SharedDevice, SharedQueue, SharedSampler, SharedTextureView,
+    Device, Queue, SharedSampler, SharedTextureView,
 };
 
 use super::{Image, ImageData};
@@ -79,8 +79,8 @@ impl TextureBinding for NormalMap {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         TextureBinding::binding(&self.0, device, queue, state)
@@ -92,8 +92,8 @@ impl SamplerBinding for NormalMap {
 
     fn binding(
         &self,
-        device: &SharedDevice,
-        queue: &SharedQueue,
+        device: &Device,
+        queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
         SamplerBinding::binding(&self.0, device, queue, state)
@@ -101,14 +101,14 @@ impl SamplerBinding for NormalMap {
 }
 
 impl DefaultTexture for NormalMap {
-    fn default_texture(device: &SharedDevice, queue: &SharedQueue) -> SharedTextureView {
+    fn default_texture(device: &Device, queue: &Queue) -> SharedTextureView {
         let image = ImageData::new(1, 1, vec![0, 0, 255, 255]);
         image.create_view(device, queue)
     }
 }
 
 impl DefaultSampler for NormalMap {
-    fn default_sampler(device: &SharedDevice, queue: &SharedQueue) -> SharedSampler {
+    fn default_sampler(device: &Device, queue: &Queue) -> SharedSampler {
         Image::default_sampler(device, queue)
     }
 }
