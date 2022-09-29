@@ -102,7 +102,8 @@ impl SamplerBinding for NormalMap {
 
 impl DefaultTexture for NormalMap {
     fn default_texture(device: &Device, queue: &Queue) -> SharedTextureView {
-        let image = ImageData::new(1, 1, vec![0, 0, 255, 255]);
+        let image =
+            ImageData::with_format(1, 1, vec![127, 127, 255, 255], TextureFormat::Rgba8Unorm);
         image.create_view(device, queue)
     }
 }

@@ -325,7 +325,7 @@ impl Bloom {
             let mut pass = self.down.begin_render_pass(encoder, mip);
 
             pass.set_pipeline(&self.downsample_pipeline);
-            self.down.bindings[mip as usize].bind_pass(&mut pass);
+            self.down.bindings[mip as usize].apply(&mut pass);
             pass.draw(0..3, 0..1);
         }
 
@@ -333,7 +333,7 @@ impl Bloom {
             let mut pass = self.up.begin_render_pass(encoder, mip);
 
             pass.set_pipeline(&self.upsample_pipeline);
-            self.up.bindings[mip as usize].bind_pass(&mut pass);
+            self.up.bindings[mip as usize].apply(&mut pass);
             pass.draw(0..3, 0..1);
         }
 
@@ -351,7 +351,7 @@ impl Bloom {
         });
 
         pass.set_pipeline(&self.upsample_pipeline);
-        self.up.bindings[0].bind_pass(&mut pass);
+        self.up.bindings[0].apply(&mut pass);
         pass.draw(0..3, 0..1);
     }
 }

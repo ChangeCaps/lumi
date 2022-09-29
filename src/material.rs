@@ -300,7 +300,7 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
                 render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
             }
 
-            bindings.bind_pass(render_pass);
+            bindings.apply(render_pass);
 
             if let Some(indices) = primitive.mesh.indices() {
                 render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);

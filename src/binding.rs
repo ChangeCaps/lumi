@@ -283,7 +283,7 @@ impl Bindings {
             .map(|g| g.bind_group.as_ref().expect("BindGroup not created"))
     }
 
-    pub fn bind_pass<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
+    pub fn apply<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
         for (i, group) in self.bind_groups().enumerate() {
             render_pass.set_bind_group(i as u32, group, &[]);
         }

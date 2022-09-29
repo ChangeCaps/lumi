@@ -267,6 +267,7 @@ impl SamplerBinding for SharedTextureView {
             device.create_shared_sampler(&SamplerDescriptor {
                 mag_filter: FilterMode::Linear,
                 min_filter: FilterMode::Linear,
+                mipmap_filter: FilterMode::Linear,
                 ..Default::default()
             })
         });

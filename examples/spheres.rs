@@ -10,7 +10,8 @@ fn main() {
         PbrMaterial {
             ..Default::default()
         },
-        shape::cube(1.0, 1.0, 1.0),
+        shape::uv_sphere(0.5, 32),
+        //shape::cube(1.0, 1.0, 1.0),
         Mat4::IDENTITY,
     ));
     world.add_light(DirectionalLight {

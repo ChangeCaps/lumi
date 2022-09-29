@@ -43,7 +43,7 @@ pub fn framework(
     };
     let mut resized = true;
 
-    let mut renderer = Renderer::new(&device);
+    let mut renderer = Renderer::new(&device, &queue);
 
     let mut platform = Platform::new(PlatformDescriptor {
         physical_width: window.inner_size().width,

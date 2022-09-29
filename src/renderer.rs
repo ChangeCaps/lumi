@@ -6,7 +6,7 @@ use crate::{
     binding::BindingsLayout,
     bloom::Bloom,
     camera::{Camera, CameraInfo, CameraTarget},
-    environment::PreparedEnvironment,
+    environment::{PreparedEnvironment, Sky},
     frame_buffer::FrameBuffer,
     id::{CameraId, NodeId},
     light::LightBindings,
@@ -44,8 +44,8 @@ impl Default for RenderSettings {
             aspect_ratio: None,
             sample_count: 1,
             bloom_enabled: true,
-            bloom_threshold: 1.5,
-            bloom_knee: 0.5,
+            bloom_threshold: 3.5,
+            bloom_knee: 1.0,
             bloom_scale: 1.0,
         }
     }
@@ -92,12 +92,14 @@ pub struct Renderer {
     pub settings: RenderSettings,
     pub resources: Resources,
     prepared_cameras: HashMap<CameraId, PreparedCamera>,
+    sky: Sky,
     tone_mapping: ToneMapping,
 }
 
 impl Renderer {
-    pub fn new(device: &Device) -> Self {
+    pub fn new(device: &Device, queue: &Queue) -> Self {
         let mut shader_processor = ShaderProcessor::default();
+        let sky = Sky::new(device, queue, &mut shader_processor);
         let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
         let mut resources = Resources::new();
@@ -107,6 +109,7 @@ impl Renderer {
             settings: RenderSettings::default(),
             resources,
             prepared_cameras: HashMap::new(),
+            sky,
             tone_mapping,
         }
     }
@@ -114,14 +117,6 @@ impl Renderer {
     pub fn register(&mut self, device: &Device, queue: &Queue, world: &World) {
         for dynamic_renderable in world.node_storage().dynamic_renderables() {
             dynamic_renderable.register(device, queue, &mut self.resources);
-        }
-    }
-
-    pub fn prepare_environment(&mut self, device: &Device, queue: &Queue, world: &World) {
-        if !self.resources.contains::<PreparedEnvironment>() {
-            let environment = world.environment();
-            let prepared_environment = PreparedEnvironment::new(device, queue, environment);
-            self.resources.insert(prepared_environment);
         }
     }
 
@@ -179,6 +174,31 @@ impl Renderer {
         }
     }
 
+    pub fn prepare_environment(&mut self, device: &Device, queue: &Queue, world: &World) {
+        if !self.resources.contains::<PreparedEnvironment>() {
+            let environment = world.environment();
+            let prepared_environment = PreparedEnvironment::new(
+                device,
+                queue,
+                environment,
+                self.sky.integrated_brdf.clone(),
+            );
+            self.resources.insert(prepared_environment);
+        }
+    }
+
+    pub fn prepare_sky(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        world: &World,
+        target: &RenderTarget<'_>,
+    ) {
+        let prepared_environment = self.resources.get::<PreparedEnvironment>().unwrap();
+        self.sky
+            .prepare(device, queue, world, target, prepared_environment);
+    }
+
     pub fn prepare(
         &mut self,
         device: &Device,
@@ -190,6 +210,7 @@ impl Renderer {
         self.prepare_lights(world);
         self.prepare_cameras(device, world, target);
         self.prepare_environment(device, queue, world);
+        self.prepare_sky(device, queue, world, target);
 
         for (camera_id, _camera) in world.iter_cameras() {
             self.prepare_view(device, queue, world, target, camera_id);
@@ -211,6 +232,8 @@ impl Renderer {
         let prepared_camera = self.prepared_cameras.get_mut(&camera_id).unwrap();
         let camera = world.camera(camera_id);
         let mut render_pass = prepared_camera.frame_buffer.begin_hdr_render_pass(encoder);
+
+        self.sky.render(&mut render_pass, camera_id);
 
         let t = Instant::now();
         self.resources.insert(camera.info(target));

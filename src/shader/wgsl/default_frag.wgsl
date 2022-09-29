@@ -18,11 +18,12 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 		mesh.uv_0
 	);
 
-	pbr.normal_map = textureSample(
+	let normal_map = textureSample(
 		normal_map,
 		normal_map_sampler,
 		mesh.uv_0
-	).xyz * 2.0 - 1.0;	
+	).xyz;	
+
 
 	let emissive_map = textureSample(
 		emissive_map,
@@ -35,6 +36,7 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 	pbr.roughness = roughness * metallic_roughness_texture.g;
 	pbr.reflectance = reflectance;
 	pbr.emissive = emissive_map.rgb * emissive;
+	pbr.normal_map = normalize(normal_map * 2.0 - 1.0);
 
 	return pbr_light(pbr);
 }

@@ -38,7 +38,7 @@ fn new_pbr(mesh: Mesh) -> PbrInput {
 		input.w_bitangent = -mesh.w_bitangent;
 	}
 	input.normal_map = vec3<f32>(0.0, 0.0, 1.0);
-	input.view = normalize(mesh.w_position - camera.position);
+	input.view = normalize(camera.position - mesh.w_position);
 	input.base_color = vec4<f32>(1.0);
 	input.metallic = 0.01;
 	input.roughness = 0.089;
@@ -56,16 +56,17 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 	let metallic = input.metallic;
 	let reflectance = input.reflectance;
 	
-	let normal = normalize(
-		input.normal_map.x * input.w_tangent + 
-		input.normal_map.y * input.w_bitangent + 
-		input.normal_map.z * input.w_normal
+	let tbn = mat3x3<f32>(
+		input.w_tangent,
+		input.w_bitangent,
+		input.w_normal
 	);
+	let normal = normalize(tbn * input.normal_map);
 	let view = input.view;
 
 	let ndotv = max(dot(normal, view), 0.0001);
 	let f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color.rgb * metallic;
-	let reflect = reflect(-view, input.w_normal);
+	let reflect = reflect(-view, normal);
 
 	let diffuse_color = base_color.rgb * (1.0 - metallic);
 
@@ -80,14 +81,15 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 		let l = directional_lights[i];
 		light += directional_light(l, roughness, ndotv, normal, view, reflect, f0, diffuse_color);
 	}
+	
+	let f = f_schlick3(f0, 1.0, ndotv) * (1.0 - roughness);
+	let kd = (1.0 - f) * (1.0 - metallic);
+	let env = environment(roughness, ndotv, reflect, f);
+	let ambient = env;
 
-	let env_diffuse = textureSample(environment_diffuse, environment_sampler, reflect);
-	let ambient_diffuse = env_diffuse.rgb;
-	let ambient_specular = EnvBRDFApprox(f0, perceptual_roughness, ndotv);
-	let ambient_light = ambient_diffuse + ambient_specular;
-	light += ambient_light * 0.2;
+	light += ambient;
 
 	var color = base_color.rgb * light + input.emissive;
 
-	return vec4<f32>(ambient_diffuse, 1.0);
+	return vec4<f32>(color, 1.0);
 }

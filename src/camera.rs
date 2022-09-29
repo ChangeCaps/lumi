@@ -7,6 +7,7 @@ use crate::{renderer::RenderTarget, SharedTextureView};
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawCamera {
     pub position: Vec3,
+    pub aspect_ratio: f32,
     pub view: Mat4,
     pub view_proj: Mat4,
 }
@@ -158,6 +159,12 @@ impl CameraTarget {
             CameraTarget::Texture(texture) => texture.size().height,
         }
     }
+
+    pub fn get_aspect(&self, main: &RenderTarget) -> f32 {
+        let width = self.get_width(main.width) as f32;
+        let height = self.get_height(main.height) as f32;
+        width / height
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -218,6 +225,7 @@ impl Camera {
     pub fn raw(&self) -> RawCamera {
         RawCamera {
             position: self.view.w_axis.truncate(),
+            aspect_ratio: 1.0,
             view: self.view,
             view_proj: self.view_proj(),
         }
@@ -226,6 +234,7 @@ impl Camera {
     pub fn raw_aspect(&self, aspect: f32) -> RawCamera {
         RawCamera {
             position: self.view.w_axis.truncate(),
+            aspect_ratio: aspect,
             view: self.view,
             view_proj: self.view_proj_aspect(aspect),
         }
@@ -265,6 +274,7 @@ impl CameraInfo {
     pub fn raw(&self) -> RawCamera {
         RawCamera {
             position: self.view.w_axis.truncate(),
+            aspect_ratio: self.aspect_ratio(),
             view: self.view,
             view_proj: self.view_proj(),
         }

@@ -9,13 +9,13 @@ fn vertex(vertex: Vertex) -> MeshOut {
 	mesh.v_position = camera.view_proj * p;
 	mesh.w_position = p.xyz;
 
-	let n = transform * vec4<f32>(vertex.normal, 0.0);
-	mesh.w_normal = normalize(n.xyz);
+	let w_normal = transform * vec4<f32>(vertex.normal.xyz, 0.0);
+	let w_tangent = transform * vec4<f32>(vertex.tangent.xyz, 0.0);
+	let w_bitangent = cross(w_normal, w_tangent);
 
-	let t = transform * vec4<f32>(vertex.tangent.xyz, 0.0);
-	var b = cross(n.xyz, t.xyz) * vertex.tangent.w;
-	mesh.w_tangent = normalize(t.xyz);
-	mesh.w_bitangent = normalize(b);
+	mesh.w_normal = normalize(w_normal.xyz);
+	mesh.w_tangent = normalize(w_tangent.xyz);
+	mesh.w_bitangent = normalize(w_bitangent.xyz) * vertex.tangent.w;
 
 	mesh.uv_0 = vertex.uv_0;
 
