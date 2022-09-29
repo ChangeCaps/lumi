@@ -1,6 +1,8 @@
 use std::{
+    fs,
     io::{self, prelude::*},
     num::NonZeroU32,
+    path::Path,
 };
 
 use wgpu::util::DeviceExt;
@@ -27,14 +29,14 @@ impl EnvironmentData {
 
         let irradiance_size = read!(source, u32);
         let irradiance_data_size =
-            (irradiance_size * irradiance_size) as usize * Self::PIXEL_SIZE * 6;
+            BakedEnvironment::texture_size(irradiance_size, irradiance_size, 1) * 6;
         let mut irradiance_data = vec![0u8; irradiance_data_size];
         source.read_exact(&mut irradiance_data)?;
 
         let indirect_size = read!(source, u32);
         let indirect_mip_levels = read!(source, u32);
         let indirect_data_size =
-            BakedEnvironment::texture_size(indirect_size, indirect_size, indirect_mip_levels);
+            BakedEnvironment::texture_size(indirect_size, indirect_size, indirect_mip_levels) * 6;
 
         let mut indirect_data = vec![0u8; indirect_data_size];
         source.read_exact(&mut indirect_data)?;
@@ -87,6 +89,10 @@ pub struct BakedEnvironment {
     pub indirect_view: wgpu::TextureView,
 }
 
+fn align(x: u32) -> u32 {
+    wgpu::util::align_to(x, 32)
+}
+
 impl BakedEnvironment {
     pub fn create_irradiance(
         device: &wgpu::Device,
@@ -105,7 +111,7 @@ impl BakedEnvironment {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba32Float,
+                format: wgpu::TextureFormat::Rgba16Float,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             },
             &environment_data.irradiance_data,
@@ -129,17 +135,10 @@ impl BakedEnvironment {
                 mip_level_count: environment_data.indirect_mip_levels,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba32Float,
+                format: wgpu::TextureFormat::Rgba16Float,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             },
             &environment_data.indirect_data,
-        )
-    }
-
-    fn aligned_width(width: u32) -> u32 {
-        wgpu::util::align_to(
-            width,
-            wgpu::COPY_BYTES_PER_ROW_ALIGNMENT / EnvironmentData::PIXEL_SIZE as u32,
         )
     }
 
@@ -151,12 +150,11 @@ impl BakedEnvironment {
         height: u32,
         mip_levels: u32,
     ) -> Vec<u8> {
-        let size = Self::texture_size(width, height, mip_levels);
         let mut padded_size = 0;
         for mip_level in 0..mip_levels {
-            let mip_width = Self::aligned_width(width >> mip_level);
+            let padded_width = align(width >> mip_level);
             let mip_height = height >> mip_level;
-            padded_size += Self::texture_size(mip_width, mip_height, 1);
+            padded_size += Self::texture_size(padded_width, mip_height, 1) * 6;
         }
 
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -171,60 +169,72 @@ impl BakedEnvironment {
         });
 
         let mut offset = 0;
-        for mip_level in 0..mip_levels {
-            let mip_width = Self::aligned_width(width >> mip_level);
-            let mip_height = height >> mip_level;
-            let size = Self::texture_size(mip_width, mip_height, 1);
+        for layer in 0..6 {
+            for mip in 0..mip_levels {
+                let mip_width = width >> mip;
+                let padded_width = align(mip_width);
+                let mip_height = height >> mip;
+                let padded_size = Self::texture_size(padded_width, mip_height, 1);
 
-            encoder.copy_texture_to_buffer(
-                wgpu::ImageCopyTexture {
-                    texture,
-                    mip_level,
-                    aspect: wgpu::TextureAspect::All,
-                    origin: wgpu::Origin3d::ZERO,
-                },
-                wgpu::ImageCopyBuffer {
-                    buffer: &buffer,
-                    layout: wgpu::ImageDataLayout {
-                        offset,
-                        bytes_per_row: NonZeroU32::new(
-                            mip_width * EnvironmentData::PIXEL_SIZE as u32,
-                        ),
-                        rows_per_image: NonZeroU32::new(mip_height),
+                let bytes_per_row = padded_width * EnvironmentData::PIXEL_SIZE as u32;
+
+                encoder.copy_texture_to_buffer(
+                    wgpu::ImageCopyTexture {
+                        texture,
+                        mip_level: mip,
+                        origin: wgpu::Origin3d {
+                            x: 0,
+                            y: 0,
+                            z: layer,
+                        },
+                        aspect: wgpu::TextureAspect::All,
                     },
-                },
-                wgpu::Extent3d {
-                    width: mip_width,
-                    height: mip_height,
-                    depth_or_array_layers: 6,
-                },
-            );
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer,
+                        layout: wgpu::ImageDataLayout {
+                            offset,
+                            bytes_per_row: NonZeroU32::new(bytes_per_row),
+                            rows_per_image: NonZeroU32::new(mip_height),
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width: mip_width,
+                        height: mip_height,
+                        depth_or_array_layers: 1,
+                    },
+                );
 
-            offset += size as u64;
+                offset += padded_size as u64;
+            }
         }
 
         queue.submit(std::iter::once(encoder.finish()));
+        device.poll(wgpu::Maintain::Wait);
 
         buffer.slice(..).map_async(wgpu::MapMode::Read, |_| {});
         device.poll(wgpu::Maintain::Wait);
 
         let mapped = buffer.slice(..).get_mapped_range();
 
+        let size = Self::texture_size(width, height, mip_levels) * 6;
         let mut data = Vec::with_capacity(size);
 
         let mut offset = 0;
-        for mip_level in 0..mip_levels {
-            let mip_width = width >> mip_level;
-            let padded_width = Self::aligned_width(mip_width);
-            let rows = (height >> mip_level) * 6;
-            let row_size = padded_width * EnvironmentData::PIXEL_SIZE as u32;
-            let padded_row_size = padded_width * EnvironmentData::PIXEL_SIZE as u32;
 
-            for _ in 0..rows {
-                data.extend_from_slice(
-                    &mapped[offset as usize..offset as usize + row_size as usize],
-                );
-                offset += padded_row_size;
+        for _ in 0..6 {
+            for mip in 0..mip_levels {
+                let mip_width = width >> mip;
+                let padded_width = align(mip_width);
+                let mip_height = height >> mip;
+                let row_size = mip_width * EnvironmentData::PIXEL_SIZE as u32;
+                let padded_row_size = padded_width * EnvironmentData::PIXEL_SIZE as u32;
+
+                for _ in 0..mip_height {
+                    let row = &mapped[offset..offset + row_size as usize];
+                    data.extend_from_slice(row);
+
+                    offset += padded_row_size as usize;
+                }
             }
         }
 
@@ -286,6 +296,19 @@ impl BakedEnvironment {
             self.indirect_mip_levels,
         );
 
+        assert_eq!(
+            irradiance_data.len(),
+            Self::texture_size(self.irradiance_size, self.irradiance_size, 1) * 6
+        );
+        assert_eq!(
+            indirect_data.len(),
+            Self::texture_size(
+                self.indirect_size,
+                self.indirect_size,
+                self.indirect_mip_levels
+            ) * 6
+        );
+
         EnvironmentData {
             irradiance_size: self.irradiance_size,
             irradiance_data,
@@ -295,12 +318,31 @@ impl BakedEnvironment {
         }
     }
 
+    pub fn write(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        dest: impl Write,
+    ) -> io::Result<()> {
+        let environment_data = self.to_data(device, queue);
+        environment_data.save(dest)
+    }
+
+    pub fn save(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        path: impl AsRef<Path>,
+    ) -> io::Result<()> {
+        self.write(device, queue, fs::File::create(path)?)
+    }
+
     pub fn texture_size(width: u32, height: u32, mip_levels: u32) -> usize {
         let mut size = 0;
         for mip_level in 0..mip_levels {
             let mip_width = width >> mip_level;
             let mip_height = height >> mip_level;
-            size += (mip_width * mip_height) as usize * EnvironmentData::PIXEL_SIZE * 6;
+            size += (mip_width * mip_height) as usize * EnvironmentData::PIXEL_SIZE;
         }
         size
     }
@@ -321,18 +363,65 @@ impl BakedEnvironment {
 impl BakedEnvironment {
     const WORKGROUP_SIZE: u32 = 16;
 
+    pub fn open_from_eq(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        path: impl AsRef<Path>,
+    ) -> image::ImageResult<Self> {
+        let eq = image::open(path)?;
+        let eq = eq.to_rgba16();
+        let bytes = bytemuck::cast_slice(eq.as_raw());
+
+        Ok(Self::from_eq_bytes(
+            device,
+            queue,
+            bytes,
+            eq.width(),
+            eq.height(),
+        ))
+    }
+
+    pub fn from_eq_bytes(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bytes: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Self {
+        let texture = device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("Environment"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Uint,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            },
+            &bytes,
+        );
+
+        Self::from_eq(device, queue, &texture, 384, 128)
+    }
+
     pub fn from_eq(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         texture: &wgpu::Texture,
-        height: u32,
+        indirect_size: u32,
+        irradiance_size: u32,
     ) -> Self {
-        let specular_size = height * 3 / 4;
-        let diffuse_size = height / 4;
+        let specular_size = indirect_size;
+        let diffuse_size = irradiance_size;
 
         let environemnt_view = texture.create_view(&Default::default());
 
-        let specular_mips = 5;
+        let specular_mips = 30 - specular_size.leading_zeros();
         let specular_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {

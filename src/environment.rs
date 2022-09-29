@@ -1,14 +1,11 @@
-use std::{collections::HashMap, num::NonZeroU32};
+use std::collections::HashMap;
 
+use lumi_bake::{BakedEnvironment, EnvironmentData};
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingResource, BindingType, BlendState, BufferBindingType, BufferUsages, ColorTargetState,
-    ColorWrites, CompareFunction, DepthStencilState, Device, Extent3d, FragmentState,
-    MultisampleState, PipelineLayoutDescriptor, Queue, RenderPass, RenderPipeline,
-    RenderPipelineDescriptor, ShaderStages, StorageTextureAccess, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension, VertexState,
+    BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, Device,
+    Extent3d, FragmentState, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, Queue,
+    RenderPass, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
 };
 
 use crate::{
@@ -21,20 +18,22 @@ use crate::{
     SharedDevice, SharedTexture, SharedTextureView,
 };
 
+pub enum EnvironmentKind {
+    Baked(EnvironmentData),
+    RealTime(ImageData),
+}
+
 pub struct Environment {
-    image: ImageData,
+    kind: EnvironmentKind,
     id: EnvironmentId,
 }
 
 impl Default for Environment {
     fn default() -> Self {
+        let data = EnvironmentData::from_bytes(&include_bytes!("default_env.bake")[..]).unwrap();
+
         Self {
-            image: ImageData::with_format(
-                4096,
-                2048,
-                include_bytes!("default_env").to_vec(),
-                TextureFormat::Rgba16Uint,
-            ),
+            kind: EnvironmentKind::Baked(data),
             id: EnvironmentId::new(),
         }
     }
@@ -43,13 +42,22 @@ impl Default for Environment {
 impl Environment {
     pub fn new(image: ImageData) -> Self {
         Self {
-            image,
+            kind: EnvironmentKind::RealTime(image),
             id: EnvironmentId::new(),
         }
     }
 
-    pub fn image(&self) -> &ImageData {
-        &self.image
+    pub fn bake(&self, device: &Device, queue: &Queue) -> BakedEnvironment {
+        match &self.kind {
+            EnvironmentKind::Baked(data) => BakedEnvironment::from_data(device, queue, data),
+            EnvironmentKind::RealTime(image) => BakedEnvironment::from_eq_bytes(
+                device,
+                queue,
+                &image.data,
+                image.width,
+                image.height,
+            ),
+        }
     }
 
     pub fn id(&self) -> EnvironmentId {
@@ -73,7 +81,66 @@ impl PreparedEnvironment {
         environemnt: &Environment,
         integrated_brdf: SharedTextureView,
     ) -> Self {
-        todo!()
+        let baked_env = environemnt.bake(device, queue);
+
+        let diffuse_texture = SharedTexture::new(
+            baked_env.irradiance,
+            &TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: baked_env.irradiance_size,
+                    height: baked_env.irradiance_size,
+                    depth_or_array_layers: 6,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba16Float,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            },
+        );
+
+        let diffuse_view = diffuse_texture.create_view(&TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        });
+
+        let specular_texture = SharedTexture::new(
+            baked_env.indirect,
+            &TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: baked_env.indirect_size,
+                    height: baked_env.indirect_size,
+                    depth_or_array_layers: 6,
+                },
+                mip_level_count: baked_env.indirect_mip_levels,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba16Float,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            },
+        );
+
+        let specular_view = specular_texture.create_view(&TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        });
+
+        Self {
+            diffuse_texture,
+            diffuse_view,
+            specular_texture,
+            specular_view,
+            integrated_brdf,
+            id: environemnt.id(),
+        }
+    }
+
+    pub fn prepare(&mut self, device: &Device, queue: &Queue, environemnt: &Environment) {
+        if self.id != environemnt.id() {
+            *self = Self::new(device, queue, environemnt, self.integrated_brdf.clone());
+        }
     }
 
     pub fn bindings(&self) -> EnvironmentBindings {
@@ -103,47 +170,34 @@ pub struct SkyBindings {
 }
 
 pub struct Sky {
+    pub vertex: ShaderModule,
+    pub fragment: ShaderModule,
     pub bindings_layout: BindingsLayout,
     pub bindings: HashMap<CameraId, Bindings>,
+    pub pipeline_layout: PipelineLayout,
     pub pipeline: RenderPipeline,
+    pub sample_count: u32,
     pub integrated_brdf: SharedTextureView,
 }
 
 impl Sky {
-    pub fn new(device: &Device, queue: &Queue, shader_processor: &mut ShaderProcessor) -> Self {
-        let mut vertex = shader_processor
-            .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
-            .unwrap();
-        let mut fragment = shader_processor
-            .process(ShaderRef::module("lumi/default_env_frag.wgsl"))
-            .unwrap();
-        vertex.rebind(&mut fragment).unwrap();
-
-        let bindings_layout = BindingsLayout::new()
-            .with_shader(&vertex)
-            .with_shader(&fragment)
-            .bind::<EnvironmentBindings>()
-            .bind::<SkyBindings>();
-
-        let bind_group_layouts = bindings_layout.create_bind_group_layouts(device);
-        let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &bind_group_layouts,
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+    fn create_pipeline(
+        device: &Device,
+        pipeline_layout: &PipelineLayout,
+        vertex: &ShaderModule,
+        fragment: &ShaderModule,
+        sample_count: u32,
+    ) -> RenderPipeline {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Sky Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
-                module: &vertex.shader_module(device),
+                module: vertex,
                 entry_point: "vertex",
                 buffers: &[],
             },
             fragment: Some(FragmentState {
-                module: &fragment.shader_module(device),
+                module: fragment,
                 entry_point: "fragment",
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Rgba16Float,
@@ -160,11 +214,48 @@ impl Sky {
                 bias: Default::default(),
             }),
             multisample: MultisampleState {
-                count: 4,
+                count: sample_count,
                 ..Default::default()
             },
             multiview: Default::default(),
+        })
+    }
+
+    pub fn new(
+        device: &Device,
+        queue: &Queue,
+        shader_processor: &mut ShaderProcessor,
+        sample_count: u32,
+    ) -> Self {
+        let mut vertex = shader_processor
+            .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
+            .unwrap();
+        let mut fragment = shader_processor
+            .process(ShaderRef::module("lumi/default_env_frag.wgsl"))
+            .unwrap();
+        vertex.rebind(&mut fragment).unwrap();
+        vertex.compile(device).unwrap();
+        fragment.compile(device).unwrap();
+
+        let bindings_layout = BindingsLayout::new()
+            .with_shader(&vertex)
+            .with_shader(&fragment)
+            .bind::<EnvironmentBindings>()
+            .bind::<SkyBindings>();
+
+        let bind_group_layouts = bindings_layout.create_bind_group_layouts(device);
+        let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &bind_group_layouts,
+            push_constant_ranges: &[],
         });
+
+        let vertex = vertex.create_shader_module(device);
+        let fragment = fragment.create_shader_module(device);
+        let pipeline =
+            Self::create_pipeline(device, &pipeline_layout, &vertex, &fragment, sample_count);
 
         let integrated_brdf = device.create_shared_texture_with_data(
             queue,
@@ -179,15 +270,19 @@ impl Sky {
                 sample_count: 1,
                 dimension: TextureDimension::D2,
                 format: TextureFormat::Rgba8Unorm,
-                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                usage: TextureUsages::TEXTURE_BINDING,
             },
             &include_bytes!("integrated_brdf")[..],
         );
 
         Self {
+            vertex,
+            fragment,
             bindings_layout,
             bindings: HashMap::new(),
+            pipeline_layout,
             pipeline,
+            sample_count,
             integrated_brdf: integrated_brdf.create_view(&Default::default()),
         }
     }
@@ -197,9 +292,21 @@ impl Sky {
         device: &Device,
         queue: &Queue,
         world: &World,
+        sample_count: u32,
         target: &RenderTarget,
         environment: &PreparedEnvironment,
     ) {
+        if self.sample_count != sample_count {
+            self.sample_count = sample_count;
+            self.pipeline = Self::create_pipeline(
+                device,
+                &self.pipeline_layout,
+                &self.vertex,
+                &self.fragment,
+                sample_count,
+            );
+        }
+
         for (camera_id, camera) in world.iter_cameras() {
             let bindings = self
                 .bindings

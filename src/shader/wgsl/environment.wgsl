@@ -20,18 +20,18 @@ fn environment(
 	reflect: vec3<f32>, 
 	f0: vec3<f32>
 ) -> vec3<f32> {
-	let f = f_schlick3(f0, 1.0, ndotv) * (1.0 - roughness);
+	let f = fresnel(f0, ndotv) * (1.0 - roughness);
 	let kd = (1.0 - f) * (1.0 - metallic);
 	
 	// diffuse
-	let irradiance = textureSampleLevel(environment_diffuse, environment_sampler, normal, 0.0).rgb;
+	let irradiance = textureSample(environment_diffuse, environment_sampler, normal).rgb;
 	let diffuse = irradiance;
 
 	// specular
 	let levels = textureNumLevels(environment_specular);
 	let lod = roughness * f32(levels - 1);
 	let env_prefiltered = textureSampleLevel(environment_specular, environment_sampler, reflect, lod);
-	let env_brdf = textureSample(integrated_brdf, environment_sampler, vec2<f32>(ndotv, roughness));
+	let env_brdf = textureSample(integrated_brdf, environment_sampler, vec2<f32>(ndotv, min(roughness, 0.99)));
 	let specular = env_prefiltered.rgb * (f * env_brdf.x + env_brdf.y);
 
 	return kd * diffuse + specular;

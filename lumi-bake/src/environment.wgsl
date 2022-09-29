@@ -146,8 +146,8 @@ fn irradiance(@builtin(global_invocation_id) global_id: vec3<u32>) {
 		for (var theta = 0.0; theta < 0.5 * PI; theta += sample_delta) {
 			let sample_angle = vec3<f32>(
 				sin(theta) * cos(phi),
-				cos(theta),
-				sin(theta) * sin(phi)
+				sin(theta) * sin(phi),
+				cos(theta)
 			);
 			let sample_direction = sample_angle.x * right + sample_angle.y * up + sample_angle.z * direction;
 				
@@ -156,6 +156,6 @@ fn irradiance(@builtin(global_invocation_id) global_id: vec3<u32>) {
 		}
 	}
 
-	irradiance = irradiance / sample_count * PI;
+	irradiance = PI * irradiance / sample_count;
 	textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), vec4<f32>(irradiance, 1.0));
 }

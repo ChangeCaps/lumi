@@ -26,7 +26,7 @@ pub trait Renderable: Node {
         &self,
         context: &RenderContext<'_>,
         resources: &mut Resources,
-        resource: &Self::Resource,
+        resource: &mut Self::Resource,
         state: &mut Self::State,
     ) {
     }
@@ -72,12 +72,12 @@ impl DynamicRenderable {
                 Box::new(T::init(context, &resource.resource))
             },
             prepare: |this, context, resources, state| {
-                let resource = resources.remove::<RenderableResource<T>>().unwrap();
+                let mut resource = resources.remove::<RenderableResource<T>>().unwrap();
                 T::prepare(
                     unsafe { this.downcast_ref_unchecked() },
                     context,
                     resources,
-                    &resource.resource,
+                    &mut resource.resource,
                     unsafe { state.downcast_mut() },
                 );
                 resources.insert(resource);

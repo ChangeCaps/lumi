@@ -3,9 +3,9 @@ use std::borrow::Cow;
 use glam::Mat4;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-    Device, FragmentState, IndexFormat, MultisampleState, PipelineLayoutDescriptor, PrimitiveState,
-    Queue, RenderPass, RenderPipeline, RenderPipelineDescriptor, StencilState, TextureFormat,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    Device, FragmentState, IndexFormat, MultisampleState, PipelineLayout, PipelineLayoutDescriptor,
+    PrimitiveState, Queue, RenderPass, RenderPipeline, RenderPipelineDescriptor, StencilState,
+    TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 
 use crate::{
@@ -16,6 +16,7 @@ use crate::{
     light::LightBindings,
     mesh::{Mesh, MeshBufferCache, MeshBuffers},
     renderable::{RenderContext, Renderable},
+    renderer::RenderSettings,
     resources::Resources,
     shader::{DefaultShader, Shader, ShaderProcessor, ShaderRef},
 };
@@ -83,7 +84,86 @@ impl<T> Primitive<T> {
 pub struct MeshNodePipeline {
     pub bindings_layout: BindingsLayout,
     pub material_pipeline: MaterialPipeline,
+    pub pipeline_layout: PipelineLayout,
     pub render_pipeline: RenderPipeline,
+    pub sample_count: u32,
+}
+
+impl MeshNodePipeline {
+    pub fn create_render_pipeline(
+        device: &Device,
+        pipeline_layout: &PipelineLayout,
+        material_pipeline: &mut MaterialPipeline,
+        sample_count: u32,
+    ) -> RenderPipeline {
+        let vertex_attributes = material_pipeline
+            .vertices
+            .iter()
+            .map(|vertex| {
+                [VertexAttribute {
+                    offset: 0,
+                    shader_location: vertex.location,
+                    format: vertex.format,
+                }]
+            })
+            .collect::<Vec<_>>();
+
+        let vertex_buffers = material_pipeline
+            .vertices
+            .iter()
+            .enumerate()
+            .map(|(i, vertex)| VertexBufferLayout {
+                array_stride: vertex.format.size(),
+                step_mode: VertexStepMode::Vertex,
+                attributes: &vertex_attributes[i],
+            })
+            .collect::<Vec<_>>();
+
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Lumi MaterialPipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: material_pipeline.vertex_shader.shader_module(device),
+                entry_point: "vertex",
+                buffers: &vertex_buffers,
+            },
+            fragment: Some(FragmentState {
+                module: material_pipeline.fragment_shader.shader_module(device),
+                entry_point: "fragment",
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Rgba16Float,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
+            multisample: MultisampleState {
+                count: sample_count,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        })
+    }
+
+    pub fn recreate_pipeline(&mut self, device: &Device, sample_count: u32) {
+        if self.sample_count != sample_count {
+            self.sample_count = sample_count;
+            self.render_pipeline = Self::create_render_pipeline(
+                device,
+                &self.pipeline_layout,
+                &mut self.material_pipeline,
+                sample_count,
+            );
+        }
+    }
 }
 
 #[derive(Bind)]
@@ -153,66 +233,20 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
             push_constant_ranges: &[],
         });
 
-        let vertex_attributes = material_pipeline
-            .vertices
-            .iter()
-            .map(|vertex| {
-                [VertexAttribute {
-                    offset: 0,
-                    shader_location: vertex.location,
-                    format: vertex.format,
-                }]
-            })
-            .collect::<Vec<_>>();
-
-        let vertex_buffers = material_pipeline
-            .vertices
-            .iter()
-            .enumerate()
-            .map(|(i, vertex)| VertexBufferLayout {
-                array_stride: vertex.format.size(),
-                step_mode: VertexStepMode::Vertex,
-                attributes: &vertex_attributes[i],
-            })
-            .collect::<Vec<_>>();
-
-        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Lumi MaterialPipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &material_pipeline.vertex_shader.shader_module(device),
-                entry_point: "vertex",
-                buffers: &vertex_buffers,
-            },
-            fragment: Some(FragmentState {
-                module: &material_pipeline.fragment_shader.shader_module(device),
-                entry_point: "fragment",
-                targets: &[Some(ColorTargetState {
-                    format: TextureFormat::Rgba16Float,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
-            multisample: MultisampleState {
-                count: 4,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-        });
+        let sample_count = resources.get::<RenderSettings>().unwrap().sample_count;
+        let render_pipeline = MeshNodePipeline::create_render_pipeline(
+            device,
+            &pipeline_layout,
+            &mut material_pipeline,
+            sample_count,
+        );
 
         MeshNodePipeline {
             bindings_layout: layout,
             material_pipeline,
+            pipeline_layout,
             render_pipeline,
+            sample_count,
         }
     }
 
@@ -224,9 +258,12 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
         &self,
         context: &RenderContext<'_>,
         resources: &mut Resources,
-        resource: &Self::Resource,
+        resource: &mut Self::Resource,
         state: &mut Self::State,
     ) {
+        let settings = resources.get::<RenderSettings>().unwrap();
+        resource.recreate_pipeline(context.device, settings.sample_count);
+
         state.resize_with(self.primitives.len(), || {
             resource.bindings_layout.create_bindings(&context.device)
         });

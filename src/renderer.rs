@@ -31,6 +31,7 @@ pub struct RenderSettings {
     pub clear_color: [f32; 4],
     pub aspect_ratio: Option<f32>,
     pub sample_count: u32,
+    pub render_sky: bool,
     pub bloom_enabled: bool,
     pub bloom_threshold: f32,
     pub bloom_knee: f32,
@@ -43,6 +44,7 @@ impl Default for RenderSettings {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             aspect_ratio: None,
             sample_count: 1,
+            render_sky: true,
             bloom_enabled: true,
             bloom_threshold: 3.5,
             bloom_knee: 1.0,
@@ -68,11 +70,12 @@ impl PreparedCamera {
         device: &Device,
         shader_processor: &mut ShaderProcessor,
         camera: &Camera,
+        sample_count: u32,
         target: &RenderTarget<'_>,
     ) -> Self {
         let width = camera.target.get_width(target.width);
         let height = camera.target.get_height(target.height);
-        let frame_buffer = FrameBuffer::new(device, width, height, 4);
+        let frame_buffer = FrameBuffer::new(device, width, height, sample_count);
         Self {
             frame_buffer,
             bloom: Bloom::new(device, shader_processor, width, height),
@@ -80,16 +83,24 @@ impl PreparedCamera {
         }
     }
 
-    fn prepare(&mut self, device: &Device, camera: &Camera, target: &RenderTarget<'_>) {
+    fn prepare(
+        &mut self,
+        device: &Device,
+        camera: &Camera,
+        sample_count: u32,
+        target: &RenderTarget<'_>,
+    ) {
         let width = camera.target.get_width(target.width);
         let height = camera.target.get_height(target.height);
+
         self.frame_buffer.resize(device, width, height);
         self.bloom.resize(device, width, height);
+
+        self.frame_buffer.set_sample_count(device, sample_count);
     }
 }
 
 pub struct Renderer {
-    pub settings: RenderSettings,
     pub resources: Resources,
     prepared_cameras: HashMap<CameraId, PreparedCamera>,
     sky: Sky,
@@ -99,19 +110,27 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(device: &Device, queue: &Queue) -> Self {
         let mut shader_processor = ShaderProcessor::default();
-        let sky = Sky::new(device, queue, &mut shader_processor);
+        let sky = Sky::new(device, queue, &mut shader_processor, 1);
         let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
         let mut resources = Resources::new();
+        resources.insert(RenderSettings::default());
         resources.insert(shader_processor);
 
         Self {
-            settings: RenderSettings::default(),
             resources,
             prepared_cameras: HashMap::new(),
             sky,
             tone_mapping,
         }
+    }
+
+    pub fn settings(&self) -> &RenderSettings {
+        self.resources.get().unwrap()
+    }
+
+    pub fn settings_mut(&mut self) -> &mut RenderSettings {
+        self.resources.get_mut().unwrap()
     }
 
     pub fn register(&mut self, device: &Device, queue: &Queue, world: &World) {
@@ -162,12 +181,15 @@ impl Renderer {
     }
 
     pub fn prepare_cameras(&mut self, device: &Device, world: &World, target: &RenderTarget<'_>) {
+        let sample_count = self.settings().sample_count;
+
         for (camera_id, camera) in world.iter_cameras() {
             if let Some(prepared_camera) = self.prepared_cameras.get_mut(&camera_id) {
-                prepared_camera.prepare(device, camera, target);
+                prepared_camera.prepare(device, camera, sample_count, target);
             } else {
                 let shader_processor = self.resources.get_mut_or_default::<ShaderProcessor>();
-                let camera = PreparedCamera::new(device, shader_processor, camera, target);
+                let camera =
+                    PreparedCamera::new(device, shader_processor, camera, sample_count, target);
 
                 self.prepared_cameras.insert(camera_id, camera);
             }
@@ -184,6 +206,9 @@ impl Renderer {
                 self.sky.integrated_brdf.clone(),
             );
             self.resources.insert(prepared_environment);
+        } else {
+            let prepared_environment = self.resources.get_mut::<PreparedEnvironment>().unwrap();
+            prepared_environment.prepare(device, queue, world.environment());
         }
     }
 
@@ -194,9 +219,16 @@ impl Renderer {
         world: &World,
         target: &RenderTarget<'_>,
     ) {
-        let prepared_environment = self.resources.get::<PreparedEnvironment>().unwrap();
-        self.sky
-            .prepare(device, queue, world, target, prepared_environment);
+        let sample_count = self.settings().sample_count;
+        let prepared_environment = self.resources.get_mut::<PreparedEnvironment>().unwrap();
+        self.sky.prepare(
+            device,
+            queue,
+            world,
+            sample_count,
+            target,
+            prepared_environment,
+        );
     }
 
     pub fn prepare(
@@ -210,7 +242,10 @@ impl Renderer {
         self.prepare_lights(world);
         self.prepare_cameras(device, world, target);
         self.prepare_environment(device, queue, world);
-        self.prepare_sky(device, queue, world, target);
+
+        if self.settings().render_sky {
+            self.prepare_sky(device, queue, world, target);
+        }
 
         for (camera_id, _camera) in world.iter_cameras() {
             self.prepare_view(device, queue, world, target, camera_id);
@@ -229,11 +264,14 @@ impl Renderer {
         log::trace!("Rendering view: {}", camera_id.uuid());
         let view_start = Instant::now();
 
+        let render_sky = self.settings().render_sky;
         let prepared_camera = self.prepared_cameras.get_mut(&camera_id).unwrap();
         let camera = world.camera(camera_id);
         let mut render_pass = prepared_camera.frame_buffer.begin_hdr_render_pass(encoder);
 
-        self.sky.render(&mut render_pass, camera_id);
+        if render_sky {
+            self.sky.render(&mut render_pass, camera_id);
+        }
 
         let t = Instant::now();
         self.resources.insert(camera.info(target));
@@ -258,16 +296,17 @@ impl Renderer {
 
         self.resources.remove::<CameraInfo>();
 
-        if self.settings.bloom_enabled {
+        let settings = self.resources.get::<RenderSettings>().unwrap();
+        if settings.bloom_enabled {
             let t = Instant::now();
             prepared_camera.bloom.render(
                 device,
                 queue,
                 encoder,
                 &prepared_camera.frame_buffer.hdr_view,
-                self.settings.bloom_threshold,
-                self.settings.bloom_knee,
-                self.settings.bloom_scale,
+                settings.bloom_threshold,
+                settings.bloom_knee,
+                settings.bloom_scale,
             );
             log::trace!("Bloom Pass took: {:?}", t.elapsed());
         }
