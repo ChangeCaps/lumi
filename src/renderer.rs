@@ -44,7 +44,7 @@ impl Default for RenderSettings {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             aspect_ratio: None,
             sample_count: 1,
-            render_sky: true,
+            render_sky: false,
             bloom_enabled: true,
             bloom_threshold: 3.5,
             bloom_knee: 1.0,
