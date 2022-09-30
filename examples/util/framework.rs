@@ -15,10 +15,7 @@ pub fn framework(
     mut world: World,
     mut f: impl FnMut(Event<()>, &mut Renderer, &mut World, &egui::Context) + 'static,
 ) -> ! {
-    env_logger::builder()
-        .filter_level(log::LevelFilter::Trace)
-        .filter_module("wgpu_core", log::LevelFilter::Warn)
-        .init();
+    env_logger::init();
 
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();

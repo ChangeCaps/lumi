@@ -19,6 +19,7 @@ pub use processor::*;
 pub enum DefaultShader {
     Vertex,
     Fragment,
+    Sky,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

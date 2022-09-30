@@ -64,7 +64,7 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 	let normal = normalize(tbn * input.normal_map);
 	let view = input.view;
 
-	let ndotv = max(dot(normal, view), 0.0001);
+	let ndotv = max(dot(normal, view), 0.0);
 	let f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color.rgb * metallic;
 	let reflect = reflect(-view, normal);
 
@@ -82,11 +82,11 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 		light += directional_light(l, roughness, ndotv, normal, view, reflect, f0, diffuse_color);
 	}
 		
-	let env = environment(metallic, roughness, ndotv, normal, reflect, f0);
+	let env = environment(base_color.rgb, metallic, roughness, ndotv, normal, reflect, f0);
 
 	light += env;
 
 	var color = base_color.rgb * light + input.emissive;
 
-	return vec4<f32>(color, 1.0);
+	return vec4<f32>(env, 1.0);
 }

@@ -13,6 +13,7 @@ var integrated_brdf: texture_2d<f32>;
 var environment_sampler: sampler;
 
 fn environment(
+	base_color: vec3<f32>,
 	metallic: f32, 
 	roughness: f32, 
 	ndotv: f32, 
@@ -20,12 +21,12 @@ fn environment(
 	reflect: vec3<f32>, 
 	f0: vec3<f32>
 ) -> vec3<f32> {
-	let f = fresnel(f0, ndotv) * (1.0 - roughness);
+	let f = f_schlick_roughness3(f0, ndotv, roughness);
 	let kd = (1.0 - f) * (1.0 - metallic);
 	
 	// diffuse
 	let irradiance = textureSample(environment_diffuse, environment_sampler, normal).rgb;
-	let diffuse = irradiance;
+	let diffuse = irradiance * base_color;
 
 	// specular
 	let levels = textureNumLevels(environment_specular);

@@ -4,10 +4,11 @@ use crate::{
     bind::Bind,
     image::{Image, NormalMap},
     material::Material,
+    prelude::ShaderRef,
 };
 
 #[derive(Clone, Debug, Bind)]
-pub struct PbrMaterial {
+pub struct StandardMaterial {
     #[texture]
     #[sampler(name = "base_color_sampler")]
     pub base_color_texture: Option<Image>,
@@ -32,7 +33,7 @@ pub struct PbrMaterial {
     pub emissive: Vec3,
 }
 
-impl Default for PbrMaterial {
+impl Default for StandardMaterial {
     fn default() -> Self {
         Self {
             base_color_texture: None,
@@ -48,4 +49,8 @@ impl Default for PbrMaterial {
     }
 }
 
-impl Material for PbrMaterial {}
+impl Material for StandardMaterial {
+    fn fragment_shader() -> ShaderRef {
+        ShaderRef::module("lumi/standard_frag.wgsl")
+    }
+}

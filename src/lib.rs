@@ -50,7 +50,7 @@ pub mod prelude {
     pub use crate::light::{DirectionalLight, PointLight};
     pub use crate::material::{Material, MeshNode};
     pub use crate::mesh::{shape, Mesh};
-    pub use crate::pbr::PbrMaterial;
+    pub use crate::pbr::StandardMaterial;
     pub use crate::renderable::{RenderContext, Renderable};
     pub use crate::renderer::{RenderTarget, Renderer};
     pub use crate::resources::Resources;

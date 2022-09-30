@@ -14,7 +14,7 @@ use crate::{
     camera::RawCamera,
     id::{CameraId, EnvironmentId},
     prelude::{ImageData, RenderTarget, ShaderRef, World},
-    shader::ShaderProcessor,
+    shader::{DefaultShader, ShaderProcessor},
     SharedDevice, SharedTexture, SharedTextureView,
 };
 
@@ -231,7 +231,7 @@ impl Sky {
             .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
             .unwrap();
         let mut fragment = shader_processor
-            .process(ShaderRef::module("lumi/default_env_frag.wgsl"))
+            .process(ShaderRef::Default(DefaultShader::Sky))
             .unwrap();
         vertex.rebind(&mut fragment).unwrap();
         vertex.compile(device).unwrap();

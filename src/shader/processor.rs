@@ -168,15 +168,15 @@ impl ShaderProcessor {
         add_module!("light.wgsl", "wgsl/light.wgsl");
         add_module!("fullscreen.wgsl", "wgsl/fullscreen.wgsl");
         add_module!("tonemapping.wgsl", "wgsl/tonemapping.wgsl");
-        add_module!("pbr_material.wgsl", "wgsl/pbr_material.wgsl");
+        add_module!("standard_material.wgsl", "wgsl/standard_material.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
         add_module!("environment.wgsl", "wgsl/environment.wgsl");
-        add_module!("default_env_frag.wgsl", "wgsl/default_env_frag.wgsl");
-
         add_module!("pbr_light.wgsl", "wgsl/pbr_light.wgsl");
+
         add_module!("fullscreen_vert.wgsl", "wgsl/fullscreen_vert.wgsl");
         add_module!("bloom_frag.wgsl", "wgsl/bloom_frag.wgsl");
         add_module!("tonemapping_frag.wgsl", "wgsl/tonemapping_frag.wgsl");
+        add_module!("standard_frag.wgsl", "wgsl/standard_frag.wgsl");
     }
 
     fn read_shader_source(
@@ -188,6 +188,7 @@ impl ShaderProcessor {
             ShaderRef::Default(default) => match default {
                 DefaultShader::Vertex => Ok(include_str!("wgsl/default_vert.wgsl").to_string()),
                 DefaultShader::Fragment => Ok(include_str!("wgsl/default_frag.wgsl").to_string()),
+                DefaultShader::Sky => Ok(include_str!("wgsl/default_sky.wgsl").to_string()),
             },
             ShaderRef::Path(path) => Ok(self.io.read(Path::new(path.as_ref()))?),
             ShaderRef::Module(module) => self

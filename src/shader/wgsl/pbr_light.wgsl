@@ -36,6 +36,11 @@ fn f_schlick(f0: f32, f90: f32, vdoth: f32) -> f32 {
 	return f0 + (f90 - f0) * pow(1.0 - vdoth, 5.0);
 }
 
+fn f_schlick_roughness3(f0: vec3<f32>, roughness: f32, vdoth: f32) -> vec3<f32> {
+	let f90 = max(vec3<f32>(1.0 - roughness), f0);
+	return f0 + (f90 - f0) * pow(1.0 - vdoth, 5.0);
+}
+
 fn fresnel(f0: vec3<f32>, ldoth: f32) -> vec3<f32> {
 	let f90 = saturate(dot(f0, vec3<f32>(50.0 * 0.33)));
 	return f_schlick3(f0, f90, ldoth);

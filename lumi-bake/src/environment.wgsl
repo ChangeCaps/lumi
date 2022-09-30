@@ -29,23 +29,14 @@ fn direction(id: vec3<u32>, dimensions: vec2<i32>) -> vec3<f32> {
 
 fn load_eq(texture: texture_2d<u32>, angles: vec2<f32>) -> vec4<f32> {
 	let dimensions = textureDimensions(texture);
-	var index = vec2<i32>(
-		i32(angles.x * f32(dimensions.x) / (2.0 * PI)),
-		i32(angles.y * f32(dimensions.y) / PI)
-	);
-	index %= dimensions;
+	let uv = vec2<f32>(angles.x / PI / 2.0, -angles.y / PI) + 0.5;
+	var index = vec2<i32>(uv * vec2<f32>(dimensions));
 	return vec4<f32>(textureLoad(texture, index, 0)) / 65535.0 * 4.0;	
 }
 
 fn load_eq_dir(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f32> {
-	let dimensions = textureDimensions(texture);
-	let angles = vec2<f32>(atan2(direction.z, direction.x), acos(direction.y));
-	var index = vec2<i32>(
-		i32(angles.x * f32(dimensions.x) / (2.0 * PI)),
-		i32(angles.y * f32(dimensions.y) / PI)
-	);
-	index %= dimensions;
-	return vec4<f32>(textureLoad(texture, index, 0)) / 65535.0 * 4.0;
+	let angles = vec2<f32>(atan2(direction.z, direction.x), asin(direction.y));
+	return load_eq(texture, angles);
 }
 
 @compute @workgroup_size(16, 16, 1)

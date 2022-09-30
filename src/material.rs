@@ -15,6 +15,7 @@ use crate::{
     environment::{EnvironmentBindings, PreparedEnvironment},
     light::LightBindings,
     mesh::{Mesh, MeshBufferCache, MeshBuffers},
+    prelude::StandardMaterial,
     renderable::{RenderContext, Renderable},
     renderer::RenderSettings,
     resources::Resources,
@@ -70,7 +71,7 @@ pub trait Material: Bind + 'static {
     }
 }
 
-pub struct Primitive<T> {
+pub struct Primitive<T = StandardMaterial> {
     pub material: T,
     pub mesh: Mesh,
 }
