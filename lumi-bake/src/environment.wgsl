@@ -7,6 +7,9 @@ var eq: texture_2d<u32>;
 var cube: texture_storage_2d_array<rgba16float, write>;
 
 @group(0) @binding(2)
+var<uniform> side: u32;
+
+@group(0) @binding(3)
 var<uniform> roughness: f32;
 
 fn direction(id: vec3<u32>, dimensions: vec2<i32>) -> vec3<f32> {
@@ -14,7 +17,7 @@ fn direction(id: vec3<u32>, dimensions: vec2<i32>) -> vec3<f32> {
 
 	let uv = vec2<f32>(id.xy) / vec2<f32>(dimensions) * 2.0 - 1.0;
 
-	switch id.z {
+	switch side {
 		case 0u { direction = vec3<f32>(1.0, -uv.y, -uv.x); }
 		case 1u { direction = vec3<f32>(-1.0, -uv.y, uv.x); }
 		case 2u { direction = vec3<f32>(uv.x, 1.0, uv.y); }
@@ -31,6 +34,7 @@ fn load_eq(texture: texture_2d<u32>, angles: vec2<f32>) -> vec4<f32> {
 	let dimensions = textureDimensions(texture);
 	let uv = vec2<f32>(angles.x / PI / 2.0, -angles.y / PI) + 0.5;
 	var index = vec2<i32>(uv * vec2<f32>(dimensions));
+	index.x = clamp(index.x, 0, dimensions.x - 1);
 	return vec4<f32>(textureLoad(texture, index, 0)) / 65535.0 * 4.0;	
 }
 
@@ -43,7 +47,7 @@ fn load_eq_dir(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f32> {
 fn eq_to_cube(@builtin(global_invocation_id) global_id: vec3<u32>) {
 	let direction = direction(global_id, textureDimensions(cube));
 	let color = load_eq_dir(eq, direction);
-	textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), color);
+	textureStore(cube, vec2<i32>(global_id.xy), i32(side), color);
 }
 
 fn radical_inverse_vdc(bits: u32) -> f32 {
@@ -90,11 +94,11 @@ fn importance_sample_ggx(xi: vec2<f32>, n: vec3<f32>, roughness: f32) -> vec3<f3
 }
 
 @compute @workgroup_size(16, 16, 1)
-fn specular(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn indirect(@builtin(global_invocation_id) global_id: vec3<u32>) {
 	let direction = direction(global_id, textureDimensions(cube));
 	
 	if roughness == 0.0 {
-		textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), load_eq_dir(eq, direction));
+		textureStore(cube, vec2<i32>(global_id.xy), i32(side), load_eq_dir(eq, direction));
 		return;
 	}
 
@@ -117,7 +121,7 @@ fn specular(@builtin(global_invocation_id) global_id: vec3<u32>) {
 		}
 	}
 	prefiltered_color = prefiltered_color / total_weight;
-	textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), vec4<f32>(prefiltered_color, 1.0));
+	textureStore(cube, vec2<i32>(global_id.xy), i32(side), vec4<f32>(prefiltered_color, 1.0));
 }
 
 @compute @workgroup_size(16, 16, 1)
@@ -148,5 +152,5 @@ fn irradiance(@builtin(global_invocation_id) global_id: vec3<u32>) {
 	}
 
 	irradiance = PI * irradiance / sample_count;
-	textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), vec4<f32>(irradiance, 1.0));
+	textureStore(cube, vec2<i32>(global_id.xy), i32(side), vec4<f32>(irradiance, 1.0));
 }

@@ -48,6 +48,7 @@ fn fresnel(f0: vec3<f32>, ldoth: f32) -> vec3<f32> {
 
 fn specular(
 	f0: vec3<f32>, 
+	f90: f32,
 	roughness: f32, 
 	h: vec3<f32>, 
 	ndotv: f32, 
@@ -58,7 +59,7 @@ fn specular(
 ) -> vec3<f32> {
 	let d = D_GGX(roughness, ndoth, h);
 	let v = v_smith(roughness, ndotv, ndotl);
-	let f = fresnel(f0, ldoth);
+	let f = f_schlick3(f0, f90, ldoth);
 
 	return d * v * f * specular_intensity;
 }
@@ -93,6 +94,7 @@ fn point_light(
 	view: vec3<f32>,
 	reflect: vec3<f32>,
 	f0: vec3<f32>,
+	f90: f32,
 	diffuse: vec3<f32>,
 ) -> vec3<f32> {
 	let light_to_frag = light.position - w_position;
@@ -113,7 +115,7 @@ fn point_light(
 	var ndoth = saturate(dot(normal, h));
 	var ldoth = saturate(dot(l, h));
 
-	let specular_light = specular(f0, roughness, h, ndotv, ndotl, ndoth, ldoth, specular_intensity);
+	let specular_light = specular(f0, f90, roughness, h, ndotv, ndotl, ndoth, ldoth, specular_intensity);
 
 	l = normalize(light_to_frag);
 	h = normalize(l + view);
@@ -134,6 +136,7 @@ fn directional_light(
 	view: vec3<f32>,
 	reflect: vec3<f32>,
 	f0: vec3<f32>,
+	f90: f32,
 	diffuse: vec3<f32>,
 ) -> vec3<f32> {
 	let incident = -light.direction;
@@ -145,7 +148,7 @@ fn directional_light(
 
 	let diffuse_light = fd_burley(roughness, ndotv, ndotl, ldoth) * diffuse;
 	let specular_intensity = 1.0;
-	let specular_light = specular(f0, roughness, half, ndotv, ndotl, ndoth, ldoth, specular_intensity);
+	let specular_light = specular(f0, f90, roughness, half, ndotv, ndotl, ndoth, ldoth, specular_intensity);
 
 	return (specular_light + diffuse_light) * light.color * ndotl;
 }

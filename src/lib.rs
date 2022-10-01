@@ -3,6 +3,7 @@
 #![doc(html_logo_url = "https://i.imgur.com/XTQGS8H.png")]
 
 pub mod bind;
+pub mod bind_key;
 pub mod binding;
 pub mod bloom;
 pub mod buffer;
@@ -10,6 +11,8 @@ pub mod camera;
 pub mod device;
 pub mod environment;
 pub mod frame_buffer;
+#[cfg(feature = "gltf")]
+pub mod gltf;
 pub mod id;
 pub mod image;
 pub mod key_map;

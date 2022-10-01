@@ -71,6 +71,7 @@ pub trait Material: Bind + 'static {
     }
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct Primitive<T = StandardMaterial> {
     pub material: T,
     pub mesh: Mesh,
@@ -175,9 +176,19 @@ struct MeshBindings {
     camera: RawCamera,
 }
 
-pub struct MeshNode<T> {
+#[derive(Clone, Debug)]
+pub struct MeshNode<T = StandardMaterial> {
     pub primitives: Vec<Primitive<T>>,
     pub transform: Mat4,
+}
+
+impl<T> Default for MeshNode<T> {
+    fn default() -> Self {
+        Self {
+            primitives: Vec::new(),
+            transform: Mat4::IDENTITY,
+        }
+    }
 }
 
 impl<T> MeshNode<T> {

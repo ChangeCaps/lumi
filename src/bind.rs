@@ -15,7 +15,9 @@ use wgpu::{
 
 pub use lumi_macro::Bind;
 
-use crate::{Device, Queue, SharedBuffer, SharedDevice, SharedSampler, SharedTextureView};
+use crate::{
+    bind_key::BindKey, Device, Queue, SharedBuffer, SharedDevice, SharedSampler, SharedTextureView,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SharedBufferBinding {
@@ -292,8 +294,13 @@ impl<T: SamplerBinding + DefaultSampler> SamplerBinding for Option<T> {
     }
 }
 
+pub struct UniformBindingState {
+    pub buffer: SharedBuffer,
+    pub key: BindKey,
+}
+
 impl<T: ShaderType + WriteInto> UniformBinding for T {
-    type State = Option<SharedBuffer>;
+    type State = Option<UniformBindingState>;
 
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
@@ -316,15 +323,16 @@ impl<T: ShaderType + WriteInto> UniformBinding for T {
         data.write(self).unwrap();
         let data = data.into_inner();
 
-        if let Some(buffer) = state {
-            if buffer.size() < data.len() as u64 {
+        if let Some(state) = state {
+            if state.buffer.size() < data.len() as u64 {
                 let buffer = device.create_shared_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: None,
                     contents: &data,
                     usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
                 });
 
-                *state = Some(buffer.clone());
+                state.buffer = buffer.clone();
+                state.key = BindKey::from_hash(&data);
 
                 SharedBindingResource::Buffer(SharedBufferBinding {
                     buffer,
@@ -332,10 +340,13 @@ impl<T: ShaderType + WriteInto> UniformBinding for T {
                     size: None,
                 })
             } else {
-                queue.write_buffer(buffer.buffer(), 0, &data);
+                if state.key != BindKey::from_hash(&data) {
+                    queue.write_buffer(&state.buffer, 0, &data);
+                    state.key = BindKey::from_hash(&data);
+                }
 
                 SharedBindingResource::Buffer(SharedBufferBinding {
-                    buffer: buffer.clone(),
+                    buffer: state.buffer.clone(),
                     offset: 0,
                     size: None,
                 })
@@ -347,7 +358,12 @@ impl<T: ShaderType + WriteInto> UniformBinding for T {
                 usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             });
 
-            *state = Some(buffer.clone());
+            let new_state = UniformBindingState {
+                buffer: buffer.clone(),
+                key: BindKey::from_hash(&data),
+            };
+
+            *state = Some(new_state);
 
             SharedBindingResource::Buffer(SharedBufferBinding {
                 buffer,

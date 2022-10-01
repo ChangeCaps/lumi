@@ -363,6 +363,7 @@ impl BakedEnvironment {
 impl BakedEnvironment {
     const WORKGROUP_SIZE: u32 = 16;
 
+    #[cfg(feature = "image")]
     pub fn open_from_eq(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -416,20 +417,17 @@ impl BakedEnvironment {
         indirect_size: u32,
         irradiance_size: u32,
     ) -> Self {
-        let specular_size = indirect_size;
-        let diffuse_size = irradiance_size;
-
         let environemnt_view = texture.create_view(&Default::default());
 
-        let specular_mips = 30 - specular_size.leading_zeros();
-        let specular_texture = device.create_texture(&wgpu::TextureDescriptor {
+        let indirect_mips = 30 - indirect_size.leading_zeros();
+        let indirect_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
-                width: specular_size,
-                height: specular_size,
+                width: indirect_size,
+                height: indirect_size,
                 depth_or_array_layers: 6,
             },
-            mip_level_count: specular_mips,
+            mip_level_count: indirect_mips,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
@@ -439,11 +437,11 @@ impl BakedEnvironment {
                 | wgpu::TextureUsages::COPY_SRC,
         });
 
-        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
+        let irradiance_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Environment Diffuse Texture"),
             size: wgpu::Extent3d {
-                width: diffuse_size,
-                height: diffuse_size,
+                width: irradiance_size,
+                height: irradiance_size,
                 depth_or_array_layers: 6,
             },
             mip_level_count: 1,
@@ -455,9 +453,56 @@ impl BakedEnvironment {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC,
         });
-        let diffuse_view = diffuse_texture.create_view(&Default::default());
+        let irradiance_view = irradiance_texture.create_view(&Default::default());
 
-        let specular_bind_group_layout =
+        let indirect_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Uint,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let irradiance_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
                 entries: &[
@@ -494,79 +539,96 @@ impl BakedEnvironment {
                 ],
             });
 
-        let diffuse_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Uint,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::WriteOnly,
-                            format: wgpu::TextureFormat::Rgba16Float,
-                            view_dimension: wgpu::TextureViewDimension::D2Array,
-                        },
-                        count: None,
-                    },
-                ],
-            });
-
-        let specular_pipeline_layout =
+        let indirect_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&specular_bind_group_layout],
+                bind_group_layouts: &[&indirect_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
-        let diffuse_pipeline_layout =
+        let irradiance_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&diffuse_bind_group_layout],
+                bind_group_layouts: &[&irradiance_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
-        let specular_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Environment Specular Pipeline"),
-            layout: Some(&specular_pipeline_layout),
+        let indirect_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Environment Indirect Pipeline"),
+            layout: Some(&indirect_pipeline_layout),
             module: &device.create_shader_module(wgpu::include_wgsl!("environment.wgsl")),
-            entry_point: "specular",
+            entry_point: "indirect",
         });
 
-        let diffuse_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Environment Diffuse Pipeline"),
-            layout: Some(&diffuse_pipeline_layout),
-            module: &device.create_shader_module(wgpu::include_wgsl!("environment.wgsl")),
-            entry_point: "irradiance",
-        });
+        let irradiance_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Environment irradiance Pipeline"),
+                layout: Some(&irradiance_pipeline_layout),
+                module: &device.create_shader_module(wgpu::include_wgsl!("environment.wgsl")),
+                entry_point: "irradiance",
+            });
 
-        let mut bind_groups = Vec::new();
+        let mut indirect_bind_groups = Vec::new();
 
-        for i in 0..specular_mips {
-            let specular_view = specular_texture.create_view(&wgpu::TextureViewDescriptor {
+        for i in 0..indirect_mips {
+            let indirect_view = indirect_texture.create_view(&wgpu::TextureViewDescriptor {
                 base_mip_level: i,
                 mip_level_count: NonZeroU32::new(1),
                 ..Default::default()
             });
 
-            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            let roughness_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                contents: bytemuck::bytes_of(&(i as f32 / (specular_mips - 1) as f32)),
+                contents: bytemuck::bytes_of(&(i as f32 / (indirect_mips - 1) as f32)),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+            for j in 0..6u32 {
+                let side_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: None,
+                    contents: &j.to_le_bytes(),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+
+                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: None,
+                    layout: &indirect_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&environemnt_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(&indirect_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: side_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: roughness_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
+
+                indirect_bind_groups.push(bind_group);
+            }
+        }
+
+        let mut irradiance_bind_groups = Vec::new();
+
+        for i in 0..6u32 {
+            let side_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: &i.to_le_bytes(),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
-                layout: &specular_bind_group_layout,
+                layout: &irradiance_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -574,77 +636,81 @@ impl BakedEnvironment {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&specular_view),
+                        resource: wgpu::BindingResource::TextureView(&irradiance_view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: buffer.as_entire_binding(),
+                        resource: side_buffer.as_entire_binding(),
                     },
                 ],
             });
 
-            bind_groups.push(bind_group);
+            irradiance_bind_groups.push(bind_group);
         }
 
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &diffuse_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&environemnt_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_view),
-                },
-            ],
-        });
+        /* ---------- indirect ---------- */
 
-        let mut encoder = device.create_command_encoder(&Default::default());
+        for (i, bind_group) in indirect_bind_groups.iter().enumerate() {
+            let mut encoder = device.create_command_encoder(&Default::default());
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+            compute_pass.set_pipeline(&indirect_pipeline);
 
-        let mut compute_pass = encoder.begin_compute_pass(&Default::default());
-
-        compute_pass.set_pipeline(&specular_pipeline);
-
-        for i in 0..specular_mips {
-            compute_pass.set_bind_group(0, &bind_groups[i as usize], &[]);
+            compute_pass.set_bind_group(0, bind_group, &[]);
             compute_pass.dispatch_workgroups(
-                specular_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
-                specular_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
-                6,
+                indirect_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+                indirect_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+                1,
             );
+
+            log::trace!("Baked indirect: {}/{}", i + 1, indirect_bind_groups.len());
+
+            drop(compute_pass);
+            queue.submit(std::iter::once(encoder.finish()));
+            device.poll(wgpu::Maintain::Wait);
         }
 
-        compute_pass.set_pipeline(&diffuse_pipeline);
-        compute_pass.set_bind_group(0, &diffuse_bind_group, &[]);
-        compute_pass.dispatch_workgroups(
-            diffuse_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
-            diffuse_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
-            6,
-        );
+        /* ---------- irradiance ---------- */
 
-        drop(compute_pass);
+        for (i, bind_group) in irradiance_bind_groups.iter().enumerate() {
+            let mut encoder = device.create_command_encoder(&Default::default());
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+            compute_pass.set_pipeline(&irradiance_pipeline);
 
-        queue.submit(std::iter::once(encoder.finish()));
+            compute_pass.set_bind_group(0, bind_group, &[]);
+            compute_pass.dispatch_workgroups(
+                irradiance_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+                irradiance_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+                1,
+            );
 
-        let specular_view = specular_texture.create_view(&wgpu::TextureViewDescriptor {
+            log::trace!(
+                "Baked irradiance: {}/{}",
+                i + 1,
+                irradiance_bind_groups.len()
+            );
+
+            drop(compute_pass);
+            queue.submit(std::iter::once(encoder.finish()));
+            device.poll(wgpu::Maintain::Wait);
+        }
+
+        let indirect_view = indirect_texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..Default::default()
         });
-        let diffuse_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor {
+        let irradiance_view = irradiance_texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..Default::default()
         });
 
         Self {
-            irradiance_size: diffuse_size,
-            irradiance: diffuse_texture,
-            irradiance_view: diffuse_view,
-            indirect_size: specular_size,
-            indirect_mip_levels: specular_mips,
-            indirect: specular_texture,
-            indirect_view: specular_view,
+            irradiance_size,
+            irradiance: irradiance_texture,
+            irradiance_view,
+            indirect_size,
+            indirect_mip_levels: indirect_mips,
+            indirect: indirect_texture,
+            indirect_view,
         }
     }
 }

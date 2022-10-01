@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 pub use attribute::*;
 pub use buffers::*;
 
-use glam::{Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 
 use crate::id::MeshId;
 
@@ -128,6 +128,20 @@ impl Mesh {
         self.id = MeshId::new();
 
         self.indices.as_mut().map(Arc::make_mut)
+    }
+
+    pub fn transform(&mut self, transform: Mat4) {
+        if let Some(positions) = self.positions_mut() {
+            for position in positions {
+                *position = transform.transform_point3(*position);
+            }
+        }
+
+        if let Some(normals) = self.normals_mut() {
+            for normal in normals {
+                *normal = transform.transform_vector3(*normal).normalize();
+            }
+        }
     }
 
     pub fn generate_normals(&mut self) {

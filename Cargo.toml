@@ -20,10 +20,12 @@ winit = "0.27"
 lumi-bake = { path = "lumi-bake", version = "0.1.0" }
 lumi-macro = { path = "lumi-macro", version = "0.1.0" }
 
+ahash = "0.8"
 anyhow = "1.0"
 bytemuck = { version = "1.12", features = ["derive"] }
 encase = { version = "0.3", features = ["glam"] }
 glam = { version = "0.21", features = ["bytemuck"] }
+gltf = { version = "1.0", optional = true }
 image = { version = "0.24", optional = true }
 log = "0.4"
 mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
@@ -34,5 +36,6 @@ wgpu = "0.13"
 uuid = { version = "1.1", features = ["v4"] }
 
 [features]
-default = ["image"]
-image = ["dep:image"]
+default = ["gltf", "image"]
+gltf = ["dep:gltf", "image"]
+image = ["dep:image", "lumi-bake/image"]

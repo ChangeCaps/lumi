@@ -51,6 +51,10 @@ fn new_pbr(mesh: Mesh) -> PbrInput {
 fn pbr_light(input: PbrInput) -> vec4<f32> {
 	let base_color = input.base_color;
 
+	if base_color.a < 0.01 {
+		discard;
+	}
+
 	let perceptual_roughness = input.roughness;
 	let roughness = convert_roughness(perceptual_roughness);
 	let metallic = input.metallic;
@@ -66,6 +70,7 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 
 	let ndotv = max(dot(normal, view), 0.0);
 	let f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color.rgb * metallic;
+	let f90 = clamp(dot(f0, vec3<f32>(50.0 * 0.333)), 0.0, 1.0);
 	let reflect = reflect(-view, normal);
 
 	let diffuse_color = base_color.rgb * (1.0 - metallic);
@@ -74,19 +79,19 @@ fn pbr_light(input: PbrInput) -> vec4<f32> {
 
 	for (var i = 0u; i < arrayLength(&point_lights); i += 1u) {
 		let l = point_lights[i];
-		light += point_light(input.w_position, l, roughness, ndotv, normal, view, reflect, f0, diffuse_color);
+		light += point_light(input.w_position, l, roughness, ndotv, normal, view, reflect, f0, f90, diffuse_color);
 	}
 
 	for (var i = 0u; i < arrayLength(&directional_lights); i += 1u) {
 		let l = directional_lights[i];
-		light += directional_light(l, roughness, ndotv, normal, view, reflect, f0, diffuse_color);
+		light += directional_light(l, roughness, ndotv, normal, view, reflect, f0, f90, diffuse_color);
 	}
 		
-	let env = environment(base_color.rgb, metallic, roughness, ndotv, normal, reflect, f0);
+	let env = env(diffuse_color, metallic, perceptual_roughness, ndotv, normal, reflect, f0, f90);
 
 	light += env;
 
 	var color = base_color.rgb * light + input.emissive;
 
-	return vec4<f32>(env, 1.0);
+	return vec4<f32>(env, base_color.a);
 }
