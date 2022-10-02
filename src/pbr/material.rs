@@ -19,14 +19,23 @@ pub struct StandardMaterial {
     #[sampler(name = "normal_map_sampler")]
     pub normal_map: Option<NormalMap>,
     #[texture]
+    #[sampler(name = "clearcoat_normal_map_sampler")]
+    pub clearcoat_normal_map: Option<NormalMap>,
+    #[texture]
     #[sampler(name = "emissive_map_sampler")]
     pub emissive_map: Option<Image>,
     #[uniform]
     pub base_color: Vec4,
     #[uniform]
+    pub alpha_cutoff: f32,
+    #[uniform]
     pub metallic: f32,
     #[uniform]
     pub roughness: f32,
+    #[uniform]
+    pub clearcoat: f32,
+    #[uniform]
+    pub clearcoat_roughness: f32,
     #[uniform]
     pub reflectance: f32,
     #[uniform]
@@ -39,10 +48,14 @@ impl Default for StandardMaterial {
             base_color_texture: None,
             metallic_roughness_texture: None,
             normal_map: None,
+            clearcoat_normal_map: None,
             emissive_map: None,
             base_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            alpha_cutoff: 0.01,
             metallic: 0.01,
             roughness: 0.089,
+            clearcoat: 0.0,
+            clearcoat_roughness: 0.0,
             reflectance: 0.5,
             emissive: Vec3::ZERO,
         }

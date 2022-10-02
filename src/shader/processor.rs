@@ -158,7 +158,10 @@ impl ShaderProcessor {
             ($name:literal, $source:literal) => {
                 self.add_module(
                     concat!("lumi/", $name).to_string(),
-                    include_str!($source).to_string(),
+                    #[cfg(feature = "include-shaders")]
+                    include_str!(concat!("../../shaders/", $source)).to_string(),
+                    #[cfg(not(feature = "include-shaders"))]
+                    self.io.read(concat!("shaders/", $source).as_ref()).unwrap(),
                 );
             };
         }
@@ -169,6 +172,9 @@ impl ShaderProcessor {
         add_module!("fullscreen.wgsl", "wgsl/fullscreen.wgsl");
         add_module!("tonemapping.wgsl", "wgsl/tonemapping.wgsl");
         add_module!("standard_material.wgsl", "wgsl/standard_material.wgsl");
+        add_module!("integrated_brdf.wgsl", "wgsl/integrated_brdf.wgsl");
+        add_module!("pbr_material.wgsl", "wgsl/pbr_material.wgsl");
+        add_module!("pbr_pixel.wgsl", "wgsl/pbr_pixel.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
         add_module!("environment.wgsl", "wgsl/environment.wgsl");
         add_module!("pbr_light.wgsl", "wgsl/pbr_light.wgsl");
@@ -186,9 +192,15 @@ impl ShaderProcessor {
     ) -> Result<String, ShaderError> {
         match shader_ref {
             ShaderRef::Default(default) => match default {
-                DefaultShader::Vertex => Ok(include_str!("wgsl/default_vert.wgsl").to_string()),
-                DefaultShader::Fragment => Ok(include_str!("wgsl/default_frag.wgsl").to_string()),
-                DefaultShader::Sky => Ok(include_str!("wgsl/default_sky.wgsl").to_string()),
+                DefaultShader::Vertex => {
+                    Ok(include_str!("../../shaders/wgsl/default_vert.wgsl").to_string())
+                }
+                DefaultShader::Fragment => {
+                    Ok(include_str!("../../shaders/wgsl/default_frag.wgsl").to_string())
+                }
+                DefaultShader::Sky => {
+                    Ok(include_str!("../../shaders/wgsl/default_sky.wgsl").to_string())
+                }
             },
             ShaderRef::Path(path) => Ok(self.io.read(Path::new(path.as_ref()))?),
             ShaderRef::Module(module) => self

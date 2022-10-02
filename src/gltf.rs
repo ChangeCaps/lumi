@@ -96,6 +96,7 @@ impl GltfData {
 
             let material = StandardMaterial {
                 base_color_texture,
+                alpha_cutoff: material.alpha_cutoff().unwrap_or(-1.0),
                 metallic_roughness_texture,
                 normal_map,
                 emissive_map,

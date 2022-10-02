@@ -161,8 +161,12 @@ impl From<DirectionalLight> for Light {
 
 #[derive(Default, Bind)]
 pub struct LightBindings {
+    #[uniform]
+    pub point_light_count: u32,
     #[storage_buffer]
     pub point_lights: StorageBuffer<RawPointLight>,
+    #[uniform]
+    pub directional_light_count: u32,
     #[storage_buffer]
     pub directional_lights: StorageBuffer<RawDirectionalLight>,
 }
@@ -175,8 +179,14 @@ impl LightBindings {
 
     pub fn push(&mut self, light: Light) {
         match light {
-            Light::Point(point) => self.point_lights.push(point.raw()),
-            Light::Directional(directional) => self.directional_lights.push(directional.raw()),
+            Light::Point(point) => {
+                self.point_lights.push(point.raw());
+                self.point_light_count = self.point_lights.len() as u32;
+            }
+            Light::Directional(directional) => {
+                self.directional_lights.push(directional.raw());
+                self.directional_light_count = self.directional_lights.len() as u32;
+            }
         }
     }
 }

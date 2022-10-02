@@ -81,8 +81,7 @@ fn EnvBRDFApprox(f0: vec3<f32>, perceptual_roughness: f32, ndotv: f32) -> vec3<f
 }
 
 fn convert_roughness(perceptual_roughness: f32) -> f32 {
-	let clamped_roughness = clamp(perceptual_roughness, 0.089, 1.0);
-	return clamped_roughness * clamped_roughness;
+	return perceptual_roughness * perceptual_roughness;
 }
 
 fn point_light(

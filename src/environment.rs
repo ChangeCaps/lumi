@@ -154,12 +154,13 @@ impl PreparedEnvironment {
 
 #[derive(Bind)]
 pub struct EnvironmentBindings<'a> {
-    #[sampler(name = "environment_sampler")]
     #[texture(name = "environment_diffuse", dimension = cube)]
+    #[sampler(name = "environment_sampler")]
     pub diffuse_texture: &'a SharedTextureView,
     #[texture(name = "environment_specular", dimension = cube)]
     pub specular_texture: &'a SharedTextureView,
     #[texture]
+    #[sampler(name = "integrated_brdf_sampler")]
     pub integrated_brdf: &'a SharedTextureView,
 }
 
