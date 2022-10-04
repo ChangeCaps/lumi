@@ -64,7 +64,7 @@ impl MipChain {
         let min_dimension = u32::min(width, height);
 
         let mut mip_levels = 1;
-        while min_dimension >> mip_levels > 8 {
+        while min_dimension >> mip_levels > 4 {
             mip_levels += 1;
         }
 

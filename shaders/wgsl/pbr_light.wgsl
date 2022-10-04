@@ -1,9 +1,15 @@
 #include <lumi/light.wgsl>
+#include <lumi/pbr_types.wgsl>
+#include <lumi/pbr_pixel.wgsl>
 
 let PI = 3.1415926535897932384626433832795;
 
-fn saturate(x: f32) -> f32 {
+fn saturate(x : f32) -> f32 {
 	return clamp(x, 0.0, 1.0);
+}
+
+fn saturate_half(x: f32) -> f32 {
+	return clamp(x, 0.00006103515625, 65504.0);
 }
 
 fn get_distance_attenuation(distance_squared: f32, inverse_range_squared: f32) -> f32 {
@@ -13,55 +19,65 @@ fn get_distance_attenuation(distance_squared: f32, inverse_range_squared: f32) -
 	return attenuation * 1.0 / max(distance_squared, 0.0001);
 }
 
-fn D_GGX(roughness: f32, ndoth: f32, h: vec3<f32>) -> f32 {
-	let o = 1.0 - ndoth * ndoth;
-	let a = ndoth * roughness;
+fn d_ggx(roughness: f32, noh: f32) -> f32 {
+	let o = 1.0 - noh * noh;
+	let a = noh * roughness;
 	let k = roughness / (o + a * a);
 	let d = k * k * (1.0 / PI);
-	return d;
+	return saturate_half(d);
 }
 
-fn v_smith(roughness: f32, ndotv: f32, ndotl: f32) -> f32 {
+fn v_smith(roughness: f32, nov: f32, nol: f32) -> f32 {	
 	let a2 = roughness * roughness;
-	let lv = ndotl * sqrt((ndotv - a2 * ndotv) * ndotv + a2);
-	let ll = ndotv * sqrt((ndotl - a2 * ndotl) * ndotl + a2);
-	return 0.5 / (lv + ll);
+    let lambdaV = nol * sqrt((nov - a2 * nov) * nov + a2);
+    let lambdaL = nov * sqrt((nol - a2 * nol) * nol + a2);
+    let v = 0.5 / (lambdaV + lambdaL);
+    return saturate_half(v);
 }
 
-fn f_schlick3(f0: vec3<f32>, f90: f32, vdoth: f32) -> vec3<f32> {
-	return f0 + (f90 - f0) * pow(1.0 - vdoth, 5.0);
+fn v_kelemen(loh: f32) -> f32 {
+	return saturate_half(0.25 / (loh * loh));
 }
 
-fn f_schlick(f0: f32, f90: f32, vdoth: f32) -> f32 {
-	return f0 + (f90 - f0) * pow(1.0 - vdoth, 5.0);
+fn f_schlick3(f0: vec3<f32>, f90: f32, voh: f32) -> vec3<f32> {
+	return f0 + (f90 - f0) * pow(1.0 - voh, 5.0);
 }
 
-fn f_schlick_roughness3(f0: vec3<f32>, roughness: f32, vdoth: f32) -> vec3<f32> {
-	let f90 = max(vec3<f32>(1.0 - roughness), f0);
-	return f0 + (f90 - f0) * pow(1.0 - vdoth, 5.0);
+fn f_schlick(f0: f32, f90: f32, voh: f32) -> f32 {
+	return f0 + (f90 - f0) * pow(1.0 - voh, 5.0);
 }
 
-fn fresnel(f0: vec3<f32>, ldoth: f32) -> vec3<f32> {
+fn fresnel(f0: vec3<f32>, loh: f32) -> vec3<f32> {
 	let f90 = saturate(dot(f0, vec3<f32>(50.0 * 0.33)));
-	return f_schlick3(f0, f90, ldoth);
+	return f_schlick3(f0, f90, loh);
 }
 
-fn specular(
-	f0: vec3<f32>, 
-	f90: f32,
-	roughness: f32, 
-	h: vec3<f32>, 
-	ndotv: f32, 
-	ndotl: f32,
-	ndoth: f32,
-	ldoth: f32,
-	specular_intensity: f32
+fn specular_lobe(
+	pixel: PbrPixel, 
+	nov: f32,
+	nol: f32,
+	noh: f32,
+	loh: f32,
 ) -> vec3<f32> {
-	let d = D_GGX(roughness, ndoth, h);
-	let v = v_smith(roughness, ndotv, ndotl);
-	let f = f_schlick3(f0, f90, ldoth);
+	let d = d_ggx(pixel.roughness, noh);
+	let v = v_smith(pixel.roughness, nov, nol);
+	let f = fresnel(pixel.f0, loh);
 
-	return d * v * f * specular_intensity;
+	return d * v * f;
+}
+
+fn clearcoat_lobe(
+	pixel: PbrPixel, 
+	noh: f32,
+	loh: f32,
+	fcc: ptr<function, f32>,
+) -> f32 {
+	let d = d_ggx(pixel.clearcoat_roughness, noh);
+	let v = v_kelemen(loh);
+	let f = f_schlick(0.04, 1.0, loh) * pixel.clearcoat;
+	*fcc = f;
+
+	return d * v * f;
 }
 
 fn fd_burley(roughness: f32, ndotv: f32, ndotl: f32, ldoth: f32) -> f32 {
@@ -71,83 +87,80 @@ fn fd_burley(roughness: f32, ndotv: f32, ndotl: f32, ldoth: f32) -> f32 {
 	return light_scatter * view_scatter * (1.0 / PI);
 }
 
-fn EnvBRDFApprox(f0: vec3<f32>, perceptual_roughness: f32, ndotv: f32) -> vec3<f32> {
-    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
-    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
-    let r = perceptual_roughness * c0 + c1;
-    let a004 = min(r.x * r.x, exp2(-9.28 * ndotv)) * r.x + r.y;
-    let AB = vec2<f32>(-1.04, 1.04) * a004 + r.zw;
-    return f0 * AB.x + AB.y;
-}
-
-fn convert_roughness(perceptual_roughness: f32) -> f32 {
-	return perceptual_roughness * perceptual_roughness;
-}
-
-fn point_light(
-	w_position: vec3<f32>,
-	light: PointLight,
-	roughness: f32,
-	ndotv: f32,
-	normal: vec3<f32>,
-	view: vec3<f32>,
-	reflect: vec3<f32>,
-	f0: vec3<f32>,
-	f90: f32,
-	diffuse: vec3<f32>,
+fn light_surface(
+	pixel: PbrPixel,
+	geom: PbrGeometry,
+	light: Light,
 ) -> vec3<f32> {
-	let light_to_frag = light.position - w_position;
+	let h = normalize(light.l + geom.v);
+	let nol = saturate(dot(geom.n, light.l));
+	let noh = saturate(dot(geom.n, h));
+	let loh = saturate(dot(light.l, h));
+
+	var diffuse_light = fd_burley(pixel.roughness, geom.nov, nol, loh) * pixel.diffuse_color;
+	var specular_light = specular_lobe(pixel, geom.nov, nol, noh, loh);
+
+	if pixel.clearcoat > 0.0 {
+		let clearcoat_nol = saturate(dot(geom.clearcoat_n, light.l));
+		let clearcoat_noh = saturate(dot(geom.clearcoat_n, h));
+
+		var fcc: f32;
+		let clearcoat_specular = clearcoat_lobe(pixel, clearcoat_noh, loh, &fcc);
+		let attenuation = 1.0 - fcc;
+
+		diffuse_light *= attenuation;
+		specular_light *= attenuation;
+
+		specular_light += vec3<f32>(clearcoat_specular) * clearcoat_nol;
+	}
+
+	return (diffuse_light + specular_light) * light.attenuation * light.intensity * light.color * nol;
+}
+
+fn point_light(	
+	point_light: PointLight,
+	pixel: PbrPixel,
+	geom: PbrGeometry,
+) -> vec3<f32> {
+	let light_to_frag = point_light.position - geom.position;
 	let distance_squared = dot(light_to_frag, light_to_frag);
-	let inverse_range_squared = 1.0 / (light.range * light.range);
-	let range_attenuation = get_distance_attenuation(distance_squared, inverse_range_squared);
+	let inverse_range_squared = 1.0 / (point_light.range * point_light.range);
+	let range_attenuation = get_distance_attenuation(distance_squared, inverse_range_squared);	
 
-	let a = roughness;
-	let center_to_ray = dot(light_to_frag, reflect) * reflect -	light_to_frag;
-	let closest_point = light_to_frag + center_to_ray * saturate(light.radius * inverseSqrt(dot(center_to_ray, center_to_ray)));
-	let l_spec_length_inverse = inverseSqrt(dot(closest_point, closest_point));
-	let normalization_factor = a / saturate(a + (light.radius * 0.5 * l_spec_length_inverse));
-	let specular_intensity = normalization_factor * normalization_factor;
-
-	var l = closest_point * l_spec_length_inverse;
-	var h = normalize(l + view);
-	var ndotl = saturate(dot(normal, l));
-	var ndoth = saturate(dot(normal, h));
-	var ldoth = saturate(dot(l, h));
-
-	let specular_light = specular(f0, f90, roughness, h, ndotv, ndotl, ndoth, ldoth, specular_intensity);
-
-	l = normalize(light_to_frag);
-	h = normalize(l + view);
-	ndotl = saturate(dot(normal, l));
-	ndoth = saturate(dot(normal, h));
-	ldoth = saturate(dot(l, h));
-
-	let diffuse_light = fd_burley(roughness, ndotv, ndotl, ldoth) * diffuse;
-
-	return (specular_light + diffuse_light) * light.color * range_attenuation * ndotl;
+	var light: Light;
+	light.color = point_light.color;
+	light.intensity = point_light.intensity * camera.exposure;
+	light.l = normalize(light_to_frag);
+	light.attenuation = range_attenuation;
+	return light_surface(pixel, geom, light);
 }
 
 fn directional_light(
-	light: DirectionalLight,
-	roughness: f32,
-	ndotv: f32,
-	normal: vec3<f32>,
-	view: vec3<f32>,
-	reflect: vec3<f32>,
-	f0: vec3<f32>,
-	f90: f32,
-	diffuse: vec3<f32>,
+	directionl_light: DirectionalLight,
+	pixel: PbrPixel,
+	geom: PbrGeometry,
 ) -> vec3<f32> {
-	let incident = -light.direction;
+	var light: Light;
+	light.color = directionl_light.color;
+	light.intensity = directionl_light.intensity * camera.exposure;
+	light.l = -directionl_light.direction;
+	light.attenuation = 1.0;
+	return light_surface(pixel, geom, light);
+}
 
-	let half = normalize(incident + view);
-	let ndotl = saturate(dot(normal, incident));
-	let ndoth = saturate(dot(normal, half));
-	let ldoth = saturate(dot(incident, half));
+fn pbr_lights(
+	pixel: PbrPixel,
+	geom: PbrGeometry,
+) -> vec3<f32> {
+	var color = vec3<f32>(0.0);	
 
-	let diffuse_light = fd_burley(roughness, ndotv, ndotl, ldoth) * diffuse;
-	let specular_intensity = 1.0;
-	let specular_light = specular(f0, f90, roughness, half, ndotv, ndotl, ndoth, ldoth, specular_intensity);
+	for (var i = 0u; i < point_light_count; i = i + 1u) {
+		color += point_light(point_lights[i], pixel, geom);
+	}
 
-	return (specular_light + diffuse_light) * light.color * ndotl;
+	for (var i = 0u; i < directional_light_count; i = i + 1u) {
+		color += directional_light(directional_lights[i], pixel, geom);
+	}
+
+	return color;
 }

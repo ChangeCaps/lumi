@@ -7,8 +7,8 @@ use crate::{bind::Bind, buffer::StorageBuffer};
 pub struct RawPointLight {
     pub position: Vec3,
     pub color: Vec3,
+    pub intensity: f32,
     pub range: f32,
-    pub radius: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -17,7 +17,6 @@ pub struct PointLight {
     pub color: Vec3,
     pub intensity: f32,
     pub range: f32,
-    pub radius: f32,
 }
 
 impl Default for PointLight {
@@ -25,9 +24,8 @@ impl Default for PointLight {
         Self {
             position: Vec3::ZERO,
             color: Vec3::ONE,
-            intensity: 1.0,
+            intensity: 800.0,
             range: 20.0,
-            radius: 0.0,
         }
     }
 }
@@ -57,11 +55,13 @@ impl AsLight for PointLight {
 
 impl PointLight {
     pub fn raw(&self) -> RawPointLight {
+        let intensity = self.intensity / (4.0 * std::f32::consts::PI);
+
         RawPointLight {
             position: self.position,
-            color: self.color * self.intensity,
+            color: self.color,
+            intensity,
             range: self.range,
-            radius: self.radius,
         }
     }
 }
@@ -70,13 +70,14 @@ impl PointLight {
 pub struct RawDirectionalLight {
     pub direction: Vec3,
     pub color: Vec3,
+    pub intensity: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct DirectionalLight {
     pub direction: Vec3,
     pub color: Vec3,
-    pub intensity: f32,
+    pub illuminance: f32,
 }
 
 impl Default for DirectionalLight {
@@ -84,7 +85,7 @@ impl Default for DirectionalLight {
         Self {
             direction: Vec3::new(0.0, -1.0, 0.0),
             color: Vec3::ONE,
-            intensity: 1.0,
+            illuminance: 100_000.0,
         }
     }
 }
@@ -116,6 +117,41 @@ impl DirectionalLight {
     pub fn raw(&self) -> RawDirectionalLight {
         RawDirectionalLight {
             direction: self.direction.normalize(),
+            color: self.color,
+            intensity: self.illuminance,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, ShaderType)]
+pub struct RawAmbientLight {
+    pub color: Vec3,
+}
+
+impl Default for RawAmbientLight {
+    fn default() -> Self {
+        Self { color: Vec3::ONE }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AmbientLight {
+    pub color: Vec3,
+    pub intensity: f32,
+}
+
+impl Default for AmbientLight {
+    fn default() -> Self {
+        Self {
+            color: Vec3::ONE,
+            intensity: 35000.0,
+        }
+    }
+}
+
+impl AmbientLight {
+    pub fn raw(&self) -> RawAmbientLight {
+        RawAmbientLight {
             color: self.color * self.intensity,
         }
     }
@@ -161,6 +197,8 @@ impl From<DirectionalLight> for Light {
 
 #[derive(Default, Bind)]
 pub struct LightBindings {
+    #[uniform]
+    pub ambient_light: RawAmbientLight,
     #[uniform]
     pub point_light_count: u32,
     #[storage_buffer]

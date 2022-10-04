@@ -33,7 +33,7 @@ fn quadratic_threshold(color: vec4<f32>, threshold: f32, curve: vec3<f32>) -> ve
 @fragment
 fn downsample(fs: Fullscreen) -> @location(0) vec4<f32> {
 	let texel_size = 1.0 / vec2<f32>(textureDimensions(source_texture));
-	let scale = texel_size * 2.0 * scale;
+	let scale = texel_size * scale;
 	
 	let a = textureSample(source_texture, source_sampler, fs.uv + vec2<f32>(-1.0, -1.0) * scale);
 	let b = textureSample(source_texture, source_sampler, fs.uv + vec2<f32>( 0.0, -1.0) * scale);

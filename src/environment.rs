@@ -263,8 +263,8 @@ impl Sky {
             &TextureDescriptor {
                 label: Some("Integrated BRDF"),
                 size: Extent3d {
-                    width: 400,
-                    height: 400,
+                    width: 256,
+                    height: 256,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,

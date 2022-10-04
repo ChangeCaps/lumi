@@ -10,13 +10,15 @@ use crate::{
     camera::Camera,
     environment::Environment,
     id::{CameraId, LightId, NodeId},
-    light::{AsLight, Light},
+    light::{AmbientLight, AsLight, Light},
     renderable::Renderable,
 };
 
+#[derive(Default)]
 pub struct World {
     environment: Environment,
     nodes: NodeStorage,
+    ambient_light: AmbientLight,
     lights: HashMap<LightId, Light>,
     cameras: HashMap<CameraId, Camera>,
 }
@@ -26,6 +28,7 @@ impl World {
         Self {
             environment: Environment::default(),
             nodes: NodeStorage::new(),
+            ambient_light: AmbientLight::default(),
             lights: HashMap::new(),
             cameras: HashMap::new(),
         }
@@ -51,16 +54,32 @@ impl World {
         self.lights.iter().map(|(id, light)| (*id, light))
     }
 
+    pub fn iter_lights_mut(&mut self) -> impl Iterator<Item = (LightId, &mut Light)> {
+        self.lights.iter_mut().map(|(id, light)| (*id, light))
+    }
+
     pub fn lights(&self) -> impl Iterator<Item = &Light> {
         self.lights.values()
+    }
+
+    pub fn lights_mut(&mut self) -> impl Iterator<Item = &mut Light> {
+        self.lights.values_mut()
     }
 
     pub fn iter_cameras(&self) -> impl Iterator<Item = (CameraId, &Camera)> {
         self.cameras.iter().map(|(id, camera)| (*id, camera))
     }
 
+    pub fn iter_cameras_mut(&mut self) -> impl Iterator<Item = (CameraId, &mut Camera)> {
+        self.cameras.iter_mut().map(|(id, camera)| (*id, camera))
+    }
+
     pub fn cameras(&self) -> impl Iterator<Item = &Camera> {
         self.cameras.values()
+    }
+
+    pub fn cameras_mut(&mut self) -> impl Iterator<Item = &mut Camera> {
+        self.cameras.values_mut()
     }
 }
 
@@ -89,6 +108,14 @@ impl World {
 }
 
 impl World {
+    pub fn ambient(&self) -> &AmbientLight {
+        &self.ambient_light
+    }
+
+    pub fn ambient_mut(&mut self) -> &mut AmbientLight {
+        &mut self.ambient_light
+    }
+
     pub fn add_light(&mut self, light: impl Into<Light>) -> LightId {
         let entity = LightId::new();
         self.lights.insert(entity, light.into());

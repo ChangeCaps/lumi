@@ -102,7 +102,7 @@ impl GltfData {
                 emissive_map,
                 base_color: pbr.base_color_factor().into(),
                 metallic: pbr.metallic_factor(),
-                roughness: pbr.roughness_factor(),
+                roughness: pbr.roughness_factor().sqrt(),
                 emissive: material.emissive_factor().into(),
                 ..Default::default()
             };

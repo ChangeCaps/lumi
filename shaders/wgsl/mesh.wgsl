@@ -27,6 +27,8 @@ struct MeshOut {
 struct Mesh {
 	@builtin(front_facing)
 	v_front_facing: bool,
+	@builtin(position)
+	v_frag_coord: vec4<f32>,
 	@location(0)
 	w_position: vec3<f32>,
 	@location(1)

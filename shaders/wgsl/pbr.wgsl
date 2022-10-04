@@ -1,7 +1,7 @@
 #include <lumi/light.wgsl>
 #include <lumi/pbr_light.wgsl>
 #include <lumi/environment.wgsl>
-#include <lumi/pbr_material.wgsl>
+#include <lumi/pbr_types.wgsl>
 #include <lumi/pbr_pixel.wgsl>
 
 fn pbr_light(pbr: Pbr) -> vec4<f32> {
@@ -13,6 +13,7 @@ fn pbr_light(pbr: Pbr) -> vec4<f32> {
 	let pixel = get_pbr_pixel(pbr, geometry);
 
 	var color = environment(pixel, geometry);
+	color += pbr_lights(pixel, geometry);
 
 	return vec4<f32>(color, pbr.base_color.a);
 }

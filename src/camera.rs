@@ -10,6 +10,7 @@ pub struct RawCamera {
     pub aspect_ratio: f32,
     pub view: Mat4,
     pub view_proj: Mat4,
+    pub exposure: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -171,6 +172,9 @@ impl CameraTarget {
 pub struct Camera {
     pub view: Mat4,
     pub projection: Projection,
+    pub aperture: f32,
+    pub shutter_speed: f32,
+    pub sensitivity: f32,
     pub target: CameraTarget,
     pub priority: u32,
     pub enabled: bool,
@@ -182,6 +186,9 @@ impl Default for Camera {
             view: Mat4::IDENTITY,
             projection: Projection::default(),
             target: CameraTarget::default(),
+            aperture: 16.0,
+            shutter_speed: 1.0 / 250.0,
+            sensitivity: 100.0,
             priority: 0,
             enabled: true,
         }
@@ -222,12 +229,19 @@ impl Camera {
         self.projection.projection_aspect(aspect) * self.view.inverse()
     }
 
+    pub fn exposure(&self) -> f32 {
+        let a = f32::log2(self.aperture * self.aperture / self.shutter_speed);
+        let b = f32::log2(self.sensitivity / 100.0);
+        1.0 / (f32::powf(2.0, a - b) * 1.2)
+    }
+
     pub fn raw(&self) -> RawCamera {
         RawCamera {
             position: self.view.w_axis.truncate(),
             aspect_ratio: 1.0,
             view: self.view,
             view_proj: self.view_proj(),
+            exposure: self.exposure(),
         }
     }
 
@@ -237,6 +251,7 @@ impl Camera {
             aspect_ratio: aspect,
             view: self.view,
             view_proj: self.view_proj_aspect(aspect),
+            exposure: self.exposure(),
         }
     }
 
@@ -244,6 +259,7 @@ impl Camera {
         CameraInfo {
             view: self.view,
             projection: self.projection,
+            exposure: self.exposure(),
             width: self.target.get_width(main.width),
             height: self.target.get_height(main.height),
         }
@@ -254,6 +270,7 @@ impl Camera {
 pub struct CameraInfo {
     pub view: Mat4,
     pub projection: Projection,
+    pub exposure: f32,
     pub width: u32,
     pub height: u32,
 }
@@ -277,6 +294,7 @@ impl CameraInfo {
             aspect_ratio: self.aspect_ratio(),
             view: self.view,
             view_proj: self.view_proj(),
+            exposure: self.exposure,
         }
     }
 }

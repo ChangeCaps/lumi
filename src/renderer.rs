@@ -175,6 +175,8 @@ impl Renderer {
         let light_bindings = self.resources.get_mut_or_default::<LightBindings>();
         light_bindings.clear();
 
+        light_bindings.ambient_light = world.ambient().raw();
+
         for light in world.lights() {
             light_bindings.push(light.clone());
         }

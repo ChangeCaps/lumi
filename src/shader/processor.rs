@@ -158,9 +158,9 @@ impl ShaderProcessor {
             ($name:literal, $source:literal) => {
                 self.add_module(
                     concat!("lumi/", $name).to_string(),
-                    #[cfg(feature = "include-shaders")]
+                    #[cfg(not(feature = "load-shaders"))]
                     include_str!(concat!("../../shaders/", $source)).to_string(),
-                    #[cfg(not(feature = "include-shaders"))]
+                    #[cfg(feature = "load-shaders")]
                     self.io.read(concat!("shaders/", $source).as_ref()).unwrap(),
                 );
             };
@@ -173,7 +173,7 @@ impl ShaderProcessor {
         add_module!("tonemapping.wgsl", "wgsl/tonemapping.wgsl");
         add_module!("standard_material.wgsl", "wgsl/standard_material.wgsl");
         add_module!("integrated_brdf.wgsl", "wgsl/integrated_brdf.wgsl");
-        add_module!("pbr_material.wgsl", "wgsl/pbr_material.wgsl");
+        add_module!("pbr_types.wgsl", "wgsl/pbr_types.wgsl");
         add_module!("pbr_pixel.wgsl", "wgsl/pbr_pixel.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
         add_module!("environment.wgsl", "wgsl/environment.wgsl");

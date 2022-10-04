@@ -39,3 +39,4 @@ uuid = { version = "1.1", features = ["v4"] }
 default = ["gltf", "image"]
 gltf = ["dep:gltf", "image"]
 image = ["dep:image", "lumi-bake/image"]
+load-shaders = []

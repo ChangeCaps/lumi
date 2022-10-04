@@ -2,6 +2,7 @@
 #include <lumi/mesh.wgsl>
 
 struct Pbr {
+	frag_coord: vec4<f32>,
 	w_position: vec3<f32>,
 	normal: vec3<f32>,
 	view: vec3<f32>,
@@ -19,6 +20,7 @@ struct Pbr {
 fn default_pbr(mesh: Mesh) -> Pbr {
 	var pbr: Pbr;
 
+	pbr.frag_coord = mesh.v_frag_coord;
 	pbr.w_position = mesh.w_position;	
 	pbr.normal = mesh.w_normal;
 	pbr.view = normalize(camera.position - mesh.w_position);
@@ -36,6 +38,7 @@ fn default_pbr(mesh: Mesh) -> Pbr {
 }
 
 struct PbrGeometry {
+	position: vec3<f32>,
 	n: vec3<f32>,
 	v: vec3<f32>,
 	r: vec3<f32>,
@@ -48,15 +51,16 @@ struct PbrGeometry {
 fn compute_geometry(pbr: Pbr) -> PbrGeometry {
 	var geometry: PbrGeometry;
 
+	geometry.position = pbr.w_position;
 	geometry.n = pbr.normal;
 	geometry.v = pbr.view;
 	geometry.r = reflect(-geometry.v, geometry.n);
-	geometry.nov = max(dot(geometry.n, geometry.v), 0.0);
+	geometry.nov = max(dot(geometry.n, geometry.v), 0.0001);
 
 	if pbr.clearcoat > 0.0 {
 		geometry.clearcoat_n = pbr.clearcoat_normal;
 		geometry.clearcoat_r = reflect(-geometry.v, geometry.clearcoat_n);
-		geometry.clearcoat_nov = max(dot(geometry.clearcoat_n, geometry.v), 0.0);
+		geometry.clearcoat_nov = max(dot(geometry.clearcoat_n, geometry.v), 0.0001);
 	}	
 
 	return geometry;

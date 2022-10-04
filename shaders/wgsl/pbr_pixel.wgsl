@@ -1,7 +1,8 @@
 #include <lumi/integrated_brdf.wgsl>
-#include <lumi/pbr_material.wgsl>
+#include <lumi/pbr_types.wgsl>
 
 struct PbrPixel {
+	frag_coord: vec4<f32>,
     diffuse_color: vec3<f32>,
     perceptual_roughness: f32,
     roughness: f32,
@@ -34,15 +35,17 @@ fn compute_diffuse_color(base_color: vec3<f32>, metallic: f32) -> vec3<f32> {
 fn get_pbr_pixel(pbr: Pbr, geometry: PbrGeometry) -> PbrPixel {
 	var pixel: PbrPixel;
 
+	pixel.frag_coord = pbr.frag_coord;
+
 	pixel.diffuse_color = compute_diffuse_color(pbr.base_color.rgb, pbr.metallic);
 
 	// roughness
-	pixel.perceptual_roughness = clamp(pbr.roughness, 0.089, 1.0);
+	pixel.perceptual_roughness = clamp(pbr.roughness, 0.089, 0.99);
 	pixel.roughness = perceptual_to_linear(pixel.perceptual_roughness);
 
 	// clearcoat
 	pixel.clearcoat = pbr.clearcoat;
-	pixel.clearcoat_perceptual_roughness = clamp(pbr.clearcoat_roughness, 0.089, 1.0);
+	pixel.clearcoat_perceptual_roughness = clamp(pbr.clearcoat_roughness, 0.089, 0.99);
 	pixel.clearcoat_roughness = perceptual_to_linear(pixel.clearcoat_perceptual_roughness);
 
 	pixel.f0 = compute_f0(pbr.base_color.rgb, pbr.metallic, pbr.reflectance);
