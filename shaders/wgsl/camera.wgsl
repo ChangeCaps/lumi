@@ -3,6 +3,7 @@ struct Camera {
 	aspect_ratio: f32,
 	view: mat4x4<f32>,
 	view_proj: mat4x4<f32>,
+	ev100: f32,
 	exposure: f32,
 }
 
