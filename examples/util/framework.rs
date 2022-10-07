@@ -37,6 +37,7 @@ pub fn framework(
         width: window.inner_size().width,
         height: window.inner_size().height,
         present_mode: PresentMode::Fifo,
+        alpha_mode: CompositeAlphaMode::Auto,
     };
     let mut resized = true;
 
