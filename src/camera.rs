@@ -233,11 +233,14 @@ impl Camera {
     }
 
     pub fn ev100(&self) -> f32 {
-        f32::log2(self.aperture * self.aperture / self.shutter_speed * 100.0 / self.sensitivity)
+        let sensitivity = self.sensitivity / 100.0;
+        let ev100 = f32::log2(self.aperture * self.aperture / self.shutter_speed * sensitivity);
+
+        ev100 - self.exposure_compensation
     }
 
     pub fn exposure(&self) -> f32 {
-        1.0 / f32::powf(2.0, self.ev100() - self.exposure_compensation) * 1.2
+        1.0 / f32::powf(2.0, self.ev100()) * 1.2
     }
 
     pub fn raw(&self) -> RawCamera {

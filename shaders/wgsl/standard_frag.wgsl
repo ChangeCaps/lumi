@@ -42,6 +42,9 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 		mesh.w_normal
 	);
 
+	pbr.thickness = thickness;
+	pbr.subsurface_power = subsurface_power;
+	pbr.subsurface_color = subsurface_color;
 	pbr.base_color = base_color_texture * base_color;
 	pbr.alpha_cutoff = alpha_cutoff;
 	pbr.metallic = metallic * metallic_roughness_texture.r;
@@ -49,9 +52,12 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 	pbr.reflectance = reflectance;
 	pbr.clearcoat = clearcoat;
 	pbr.clearcoat_roughness = clearcoat_roughness;
-	pbr.emissive = emissive_map.rgb * emissive * 8.0;
+	pbr.emissive = emissive_map.rgb * emissive;
 	pbr.normal = normalize(tbn * (normal_map * 2.0 - 1.0));
 	pbr.clearcoat_normal = normalize(tbn * (clearcoat_normal_map * 2.0 - 1.0));
+	pbr.transmission = transmission;
+	pbr.ior = ior;
+	pbr.absorption = absorption;
 
 	return pbr_light(pbr);
 }

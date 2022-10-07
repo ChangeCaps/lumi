@@ -1,4 +1,13 @@
 @group(1) @binding(0)
+var<uniform> thickness: f32;
+
+@group(1) @binding(0)
+var<uniform> subsurface_power: f32;
+
+@group(1) @binding(0)
+var<uniform> subsurface_color: vec3<f32>;
+
+@group(1) @binding(0)
 var<uniform> base_color: vec4<f32>;
 
 @group(1) @binding(0)
@@ -21,6 +30,15 @@ var<uniform> clearcoat_roughness: f32;
 
 @group(1) @binding(0)
 var<uniform> emissive: vec3<f32>;
+
+@group(1) @binding(0)
+var<uniform> transmission: f32;
+
+@group(1) @binding(0)
+var<uniform> ior: f32;
+
+@group(1) @binding(0)
+var<uniform> absorption: vec3<f32>;
 
 @group(1) @binding(0)
 var base_color_texture: texture_2d<f32>;

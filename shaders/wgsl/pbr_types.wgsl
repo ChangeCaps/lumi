@@ -4,6 +4,9 @@
 struct Pbr {
 	frag_coord: vec4<f32>,
 	w_position: vec3<f32>,
+	thickness: f32,
+	subsurface_power: f32,
+	subsurface_color: vec3<f32>,
 	normal: vec3<f32>,
 	view: vec3<f32>,
 	base_color: vec4<f32>,
@@ -15,6 +18,10 @@ struct Pbr {
 	clearcoat_normal: vec3<f32>,
 	reflectance: f32,
 	emissive: vec3<f32>,
+	emissive_exposure_compensation: f32,
+	transmission: f32,
+	ior: f32,
+	absorption: vec3<f32>,
 }
 
 fn default_pbr(mesh: Mesh) -> Pbr {
@@ -22,6 +29,9 @@ fn default_pbr(mesh: Mesh) -> Pbr {
 
 	pbr.frag_coord = mesh.v_frag_coord;
 	pbr.w_position = mesh.w_position;	
+	pbr.thickness = 1.0;
+	pbr.subsurface_power = 0.0;
+	pbr.subsurface_color = vec3<f32>(1.0);
 	pbr.normal = mesh.w_normal;
 	pbr.view = normalize(camera.position - mesh.w_position);
 	pbr.base_color = vec4<f32>(1.0);
@@ -33,6 +43,10 @@ fn default_pbr(mesh: Mesh) -> Pbr {
 	pbr.clearcoat_normal = mesh.w_normal;
 	pbr.reflectance = 0.5;
 	pbr.emissive = vec3<f32>(0.0);
+	pbr.emissive_exposure_compensation = 0.0;
+	pbr.transmission = 0.0;
+	pbr.ior = 1.5;
+	pbr.absorption = vec3<f32>(0.0);
 
 	return pbr;
 }

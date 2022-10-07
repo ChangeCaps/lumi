@@ -320,7 +320,7 @@ impl Sky {
                 device,
                 queue,
                 &SkyBindings {
-                    camera: camera.raw_aspect(aspect),
+                    camera: camera.raw_with_aspect(aspect),
                 },
             );
             bindings.bind(device, queue, &environment.bindings());

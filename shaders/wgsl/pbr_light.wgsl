@@ -19,6 +19,10 @@ fn get_distance_attenuation(distance_squared: f32, inverse_range_squared: f32) -
 	return attenuation * 1.0 / max(distance_squared, 0.0001);
 }
 
+fn fd_lambert() -> f32 {
+	return 1.0 / PI;
+}
+
 fn d_ggx(roughness: f32, noh: f32) -> f32 {
 	let o = 1.0 - noh * noh;
 	let a = noh * roughness;
@@ -97,11 +101,20 @@ fn light_surface(
 	let noh = saturate(dot(geom.n, h));
 	let loh = saturate(dot(light.l, h));
 
+	if nol < 0.0 {
+		return vec3<f32>(0.0, 0.0, 0.0);
+	}
+
 	var diffuse_light = fd_burley(pixel.roughness, geom.nov, nol, loh) * pixel.diffuse_color;
 	var specular_light = specular_lobe(pixel, geom.nov, nol, noh, loh);
 
-	if pixel.clearcoat > 0.0 {
-		let clearcoat_nol = saturate(dot(geom.clearcoat_n, light.l));
+	if has_refractions(pixel) {
+		diffuse_light *= (1.0 - pixel.transmission);
+	}
+
+	var clearcoat = vec3<f32>(0.0);
+	if has_clearcoat(pixel) {
+		let clearcoat_nol = saturate(dot(geom.clearcoat_n, light.l));	
 		let clearcoat_noh = saturate(dot(geom.clearcoat_n, h));
 
 		var fcc: f32;
@@ -111,10 +124,22 @@ fn light_surface(
 		diffuse_light *= attenuation;
 		specular_light *= attenuation;
 
-		specular_light += vec3<f32>(clearcoat_specular) * clearcoat_nol;
+		clearcoat = vec3<f32>(clearcoat_specular) * clearcoat_nol;
 	}
 
-	return (diffuse_light + specular_light) * light.attenuation * light.intensity * light.color * nol;
+	var color = (diffuse_light + specular_light) * nol;
+
+	color += clearcoat;
+	
+	if has_subsurface(pixel) {
+		let scatter_voh = saturate(dot(geom.v, -light.l));
+		let forward_scatter = exp2(scatter_voh * pixel.subsurface_power - pixel.subsurface_power);
+		let back_scatter = saturate(nol * pixel.thickness + (1.0 - pixel.thickness)) * 0.5;
+		let subsurface = mix(back_scatter, 1.0, forward_scatter) * (1.0 - pixel.thickness);
+		color += pixel.subsurface_color * subsurface * fd_lambert();
+	}
+
+	return color * light.color * light.intensity * light.attenuation;
 }
 
 fn point_light(	

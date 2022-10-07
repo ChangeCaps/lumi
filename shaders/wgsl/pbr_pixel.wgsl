@@ -3,6 +3,9 @@
 
 struct PbrPixel {
 	frag_coord: vec4<f32>,
+	thickness: f32,
+	subsurface_power: f32,
+	subsurface_color: vec3<f32>,
     diffuse_color: vec3<f32>,
     perceptual_roughness: f32,
     roughness: f32,
@@ -12,10 +15,26 @@ struct PbrPixel {
     clearcoat: f32,
     clearcoat_perceptual_roughness: f32,
     clearcoat_roughness: f32,
+	transmission: f32,
+	eta_ir: f32,
+	eta_ri: f32,
+	absorption: vec3<f32>,
 }
 
-fn perceptual_to_linear(perceptual_roughness: f32) -> f32 {
-	return perceptual_roughness * perceptual_roughness;
+fn has_subsurface(pixel: PbrPixel) -> bool {
+	return pixel.thickness < 1.0;
+}
+
+fn has_clearcoat(pixel: PbrPixel) -> bool {
+	return pixel.clearcoat > 0.0;
+}
+
+fn has_refractions(pixel: PbrPixel) -> bool {
+	return pixel.transmission > 0.0;
+}
+
+fn linear_to_perceptual_roughness(roughness: f32) -> f32 {
+	return sqrt(roughness);
 }
 
 fn compute_f0(base_color: vec3<f32>, metallic: f32, reflectance: f32) -> vec3<f32> {
@@ -37,21 +56,35 @@ fn get_pbr_pixel(pbr: Pbr, geometry: PbrGeometry) -> PbrPixel {
 
 	pixel.frag_coord = pbr.frag_coord;
 
+	pixel.thickness = pbr.thickness;
+	pixel.subsurface_power = pbr.subsurface_power;
+	pixel.subsurface_color = pbr.subsurface_color;
+
 	pixel.diffuse_color = compute_diffuse_color(pbr.base_color.rgb, pbr.metallic);
 
+	let min_roughness = 0.089 * 0.089;
 	// roughness
-	pixel.perceptual_roughness = clamp(pbr.roughness, 0.089, 0.99);
-	pixel.roughness = perceptual_to_linear(pixel.perceptual_roughness);
+	pixel.roughness = clamp(pbr.roughness, min_roughness, 0.99);
+	pixel.perceptual_roughness = linear_to_perceptual_roughness(pbr.roughness);
 
 	// clearcoat
 	pixel.clearcoat = pbr.clearcoat;
-	pixel.clearcoat_perceptual_roughness = clamp(pbr.clearcoat_roughness, 0.089, 0.99);
-	pixel.clearcoat_roughness = perceptual_to_linear(pixel.clearcoat_perceptual_roughness);
+	pixel.clearcoat_roughness = clamp(pbr.clearcoat_roughness, min_roughness, 0.99);
+	pixel.clearcoat_perceptual_roughness = linear_to_perceptual_roughness(pbr.clearcoat_roughness);
 
 	pixel.f0 = compute_f0(pbr.base_color.rgb, pbr.metallic, pbr.reflectance);
 	pixel.f90 = compute_f90(pixel.f0);
 
 	pixel.dfg = sample_brdf(pixel.perceptual_roughness, geometry.nov);
+
+	pixel.transmission = pbr.transmission;	
+	pixel.absorption = pbr.absorption;
+
+	let air_ior = 1.0;
+	let ior = max(1.0, pbr.ior);
+
+	pixel.eta_ir = air_ior / ior;
+	pixel.eta_ri = ior / air_ior;
 
 	return pixel;
 }

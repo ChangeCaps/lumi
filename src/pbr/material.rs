@@ -25,6 +25,12 @@ pub struct StandardMaterial {
     #[sampler(name = "emissive_map_sampler")]
     pub emissive_map: Option<Image>,
     #[uniform]
+    pub thickness: f32,
+    #[uniform]
+    pub subsurface_power: f32,
+    #[uniform]
+    pub subsurface_color: Vec3,
+    #[uniform]
     pub base_color: Vec4,
     #[uniform]
     pub alpha_cutoff: f32,
@@ -40,6 +46,14 @@ pub struct StandardMaterial {
     pub reflectance: f32,
     #[uniform]
     pub emissive: Vec3,
+    #[uniform]
+    pub emissive_exposure_compensation: f32,
+    #[uniform]
+    pub transmission: f32,
+    #[uniform]
+    pub ior: f32,
+    #[uniform]
+    pub absorption: Vec3,
 }
 
 impl Default for StandardMaterial {
@@ -50,6 +64,9 @@ impl Default for StandardMaterial {
             normal_map: None,
             clearcoat_normal_map: None,
             emissive_map: None,
+            thickness: 1.0,
+            subsurface_power: 0.0,
+            subsurface_color: Vec3::new(1.0, 1.0, 1.0),
             base_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             alpha_cutoff: 0.01,
             metallic: 0.01,
@@ -58,6 +75,10 @@ impl Default for StandardMaterial {
             clearcoat_roughness: 0.0,
             reflectance: 0.5,
             emissive: Vec3::ZERO,
+            emissive_exposure_compensation: 0.0,
+            transmission: 0.0,
+            ior: 1.5,
+            absorption: Vec3::new(0.0, 0.0, 0.0),
         }
     }
 }

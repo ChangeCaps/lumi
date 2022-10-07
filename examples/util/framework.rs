@@ -28,8 +28,17 @@ pub fn framework(
         force_fallback_adapter: false,
     }))
     .unwrap();
-    let (device, queue) =
-        future::block_on(adapter.request_device(&DeviceDescriptor::default(), None)).unwrap();
+    let (device, queue) = future::block_on(adapter.request_device(
+        &DeviceDescriptor {
+            limits: Limits {
+                max_uniform_buffers_per_shader_stage: 16,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        None,
+    ))
+    .unwrap();
 
     let mut configuration = SurfaceConfiguration {
         usage: TextureUsages::RENDER_ATTACHMENT,
