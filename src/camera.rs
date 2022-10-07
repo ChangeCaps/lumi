@@ -229,10 +229,12 @@ impl Camera {
         self.projection.projection_aspect(aspect) * self.view.inverse()
     }
 
+    pub fn ev100(&self) -> f32 {
+        f32::log2(self.aperture * self.aperture / self.shutter_speed * 100.0 / self.sensitivity)
+    }
+
     pub fn exposure(&self) -> f32 {
-        let a = f32::log2(self.aperture * self.aperture / self.shutter_speed);
-        let b = f32::log2(self.sensitivity / 100.0);
-        1.0 / (f32::powf(2.0, a - b) * 1.2)
+        1.0 / f32::powf(2.0, self.ev100()) * 1.2
     }
 
     pub fn raw(&self) -> RawCamera {
