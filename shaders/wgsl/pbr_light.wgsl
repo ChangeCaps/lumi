@@ -1,4 +1,5 @@
 #include <lumi/light.wgsl>
+#include <lumi/shadow.wgsl>
 #include <lumi/pbr_types.wgsl>
 #include <lumi/pbr_pixel.wgsl>
 
@@ -184,7 +185,15 @@ fn pbr_lights(
 	}
 
 	for (var i = 0u; i < directional_light_count; i = i + 1u) {
-		color += directional_light(directional_lights[i], pixel, geom);
+		let light = directional_lights[i];
+
+		var shadow: Shadow;
+		shadow.position = geom.position;
+		shadow.normal = geom.n;
+		shadow.frag_coord = pixel.frag_coord;
+
+		let shadow = directional_shadow(light, shadow, light.view_proj, light.cascade);
+		color += directional_light(light, pixel, geom) * shadow;
 	}
 
 	return color;

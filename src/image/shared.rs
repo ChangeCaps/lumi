@@ -11,6 +11,7 @@ use wgpu::TextureFormat;
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
+    bind_key::BindKey,
     Device, Queue, SharedSampler, SharedTexture, SharedTextureView,
 };
 
@@ -60,6 +61,11 @@ impl Image {
 
     pub fn load_from_file(path: &str) -> Result<Self, image::ImageError> {
         let image = ImageData::load_from_file(path)?;
+        Ok(Self::new(image))
+    }
+
+    pub fn open_hdr(path: &str) -> Result<Self, image::ImageError> {
+        let image = ImageData::open_hdr(path)?;
         Ok(Self::new(image))
     }
 
@@ -118,6 +124,12 @@ impl DerefMut for Image {
 impl TextureBinding for Image {
     type State = ();
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        TextureBinding::bind_key(self.data())
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -131,6 +143,12 @@ impl TextureBinding for Image {
 impl SamplerBinding for Image {
     type State = Option<SharedSampler>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        SamplerBinding::bind_key(self.data())
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,

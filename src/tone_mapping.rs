@@ -33,20 +33,15 @@ impl ToneMapping {
         let mut fragment = shader_processor
             .process(ShaderRef::module("lumi/tonemapping_frag.wgsl"))
             .unwrap();
-        vertex.rebind(&mut fragment).unwrap();
+        vertex.rebind_with(&mut fragment).unwrap();
 
         let bindings_layout = BindingsLayout::new()
             .with_shader(&vertex)
             .with_shader(&fragment)
             .bind::<ToneMappingBindings>();
 
+        let pipeline_layout = bindings_layout.create_pipeline_layout(device);
         let bindings = bindings_layout.create_bindings(device);
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("ToneMapping"),
-            bind_group_layouts: &bindings.layouts(),
-            push_constant_ranges: &[],
-        });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("ToneMapping"),

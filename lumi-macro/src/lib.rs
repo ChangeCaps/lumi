@@ -2,6 +2,7 @@ use proc_macro2::{Ident, Span};
 use syn::parse_quote;
 
 mod bind;
+mod phase_label;
 
 fn get_lumi() -> syn::Path {
     match proc_macro_crate::crate_name("lumi") {
@@ -22,4 +23,9 @@ fn get_lumi() -> syn::Path {
 )]
 pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     bind::derive_bind(input)
+}
+
+#[proc_macro_derive(PhaseLabel)]
+pub fn derive_phase_label(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    phase_label::derive_phase_label(input)
 }

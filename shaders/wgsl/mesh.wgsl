@@ -41,5 +41,5 @@ struct Mesh {
 	uv_0: vec2<f32>,
 }
 
-@group(0) @binding(1)
+@group(0) @binding(0)
 var<uniform> transform: mat4x4<f32>;

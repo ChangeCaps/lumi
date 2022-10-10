@@ -1,18 +1,15 @@
-use std::{
-    any::Any,
-    borrow::Cow,
-    collections::{HashMap, LinkedList},
-};
+use std::{any::Any, borrow::Cow, collections::LinkedList};
 
 use wgpu::{
-    BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BufferBindingType, RenderPass,
+    BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    ComputePass, PipelineLayout, RenderPass, ShaderStages,
 };
 
 use crate::{
     bind::{Bind, BindingLayoutEntry, SharedBindingResource},
     shader::Shader,
-    Device, Queue,
+    util::HashMap,
+    Device, Queue, SharedBindGroup, SharedDevice,
 };
 
 #[derive(Debug)]
@@ -23,6 +20,7 @@ pub struct BindingLocation {
 
 #[derive(Debug)]
 pub struct BindingsLayout {
+    visibility: Option<ShaderStages>,
     entries: LinkedList<BindingLayoutEntry>,
     bindings: HashMap<Cow<'static, str>, BindingLocation>,
 }
@@ -30,9 +28,19 @@ pub struct BindingsLayout {
 impl BindingsLayout {
     pub fn new() -> Self {
         Self {
+            visibility: None,
             entries: LinkedList::new(),
-            bindings: HashMap::new(),
+            bindings: HashMap::default(),
         }
+    }
+
+    pub fn set_visibility(&mut self, visibility: ShaderStages) {
+        self.visibility = Some(visibility);
+    }
+
+    pub fn with_visibility(mut self, visibility: ShaderStages) -> Self {
+        self.set_visibility(visibility);
+        self
     }
 
     pub fn with_shader(mut self, shader: &Shader) -> Self {
@@ -88,7 +96,7 @@ impl BindingsLayout {
 
             let entry = BindGroupLayoutEntry {
                 binding: binding.binding,
-                visibility: entry.visibility,
+                visibility: self.visibility.unwrap_or(entry.visibility),
                 ty: entry.ty,
                 count: entry.count,
             };
@@ -107,12 +115,23 @@ impl BindingsLayout {
             .collect()
     }
 
+    pub fn create_pipeline_layout(&self, device: &Device) -> PipelineLayout {
+        let bind_group_layouts = self.create_bind_group_layouts(device);
+        let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
+
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &bind_group_layouts,
+            push_constant_ranges: &[],
+        })
+    }
+
     pub fn create_bindings(&self, device: &Device) -> Bindings {
         let mut groups: Vec<BindingGroup> = self
             .create_bind_group_layouts(device)
             .into_iter()
             .map(|layout| BindingGroup {
-                bindings: HashMap::new(),
+                entries: Vec::new(),
                 layout,
                 bind_group: None,
             })
@@ -121,35 +140,23 @@ impl BindingsLayout {
         for entry in self.entries.iter() {
             let binding = self.bindings.get(&entry.name).unwrap();
 
-            let group_entry = BindingGroupEntry::new(binding.binding, (entry.state)());
+            let group_entry = BindingGroupEntry {
+                name: entry.name.clone(),
+                binding: binding.binding,
+                resource: None,
+                state: None,
+            };
 
             let group = &mut groups[binding.group as usize];
-            let key = BindingGroupKey::new(entry.name.clone(), entry.ty);
-            group.bindings.insert(key, group_entry);
+            group.entries.push(group_entry);
         }
 
         Bindings { groups }
     }
 }
 
-struct BindingGroupEntry {
-    resource: Option<SharedBindingResource>,
-    binding: u32,
-    state: Box<dyn Any + Send + Sync>,
-}
-
-impl BindingGroupEntry {
-    pub const fn new(binding: u32, state: Box<dyn Any + Send + Sync>) -> Self {
-        Self {
-            resource: None,
-            binding,
-            state,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum BindingKind {
+pub enum BindingKind {
     UniformBuffer,
     StorageBuffer,
     Texture,
@@ -157,135 +164,129 @@ enum BindingKind {
     Sampler,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct BindingGroupKey {
-    kind: BindingKind,
+struct BindingGroupEntry {
     name: Cow<'static, str>,
+    binding: u32,
+    resource: Option<SharedBindingResource>,
+    state: Option<Box<dyn Any + Send + Sync>>,
 }
 
-impl BindingGroupKey {
-    const fn new(name: Cow<'static, str>, ty: BindingType) -> Self {
-        let kind = match ty {
-            BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                ..
-            } => BindingKind::UniformBuffer,
-            BindingType::Buffer {
-                ty: BufferBindingType::Storage { .. },
-                ..
-            } => BindingKind::StorageBuffer,
-            BindingType::Texture { .. } => BindingKind::Texture,
-            BindingType::StorageTexture { .. } => BindingKind::StorageTexture,
-            BindingType::Sampler { .. } => BindingKind::Sampler,
-        };
-
-        Self { name, kind }
+impl BindingGroupEntry {
+    fn update(&mut self, resource: SharedBindingResource) -> bool {
+        if self.resource.as_ref() != Some(&resource) {
+            self.resource = Some(resource);
+            true
+        } else {
+            false
+        }
     }
 }
 
 struct BindingGroup {
-    bindings: HashMap<BindingGroupKey, BindingGroupEntry>,
+    entries: Vec<BindingGroupEntry>,
     layout: BindGroupLayout,
-    bind_group: Option<BindGroup>,
+    bind_group: Option<SharedBindGroup>,
 }
 
-impl BindingGroup {
-    #[track_caller]
-    pub fn create_bind_group(&self, device: &Device) -> BindGroup {
-        let mut entries = Vec::with_capacity(self.bindings.len());
-
-        for (name, entry) in self.bindings.iter() {
-            let resource = entry
-                .resource
-                .as_ref()
-                .unwrap_or_else(|| panic!("Binding '{}' not bound", name.name));
-
-            let entry = wgpu::BindGroupEntry {
-                binding: entry.binding,
-                resource: resource.as_binding_resource(),
-            };
-
-            entries.push(entry);
-        }
-
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &self.layout,
-            entries: &entries,
-        })
-    }
-}
+type EntryIndex = (usize, usize);
 
 pub struct Bindings {
     groups: Vec<BindingGroup>,
 }
 
 impl Bindings {
-    pub fn new(device: &Device, layout: &BindingsLayout) -> Self {
-        layout.create_bindings(device)
+    #[inline]
+    pub fn bind<T: Bind>(&mut self, device: &Device, queue: &Queue, bind: &T) {
+        bind.bind(device, queue, self);
     }
 
-    pub fn layouts(&self) -> Vec<&BindGroupLayout> {
-        self.groups.iter().map(|g| &g.layout).collect()
-    }
-
-    #[track_caller]
-    pub fn bind<T>(&mut self, device: &Device, queue: &Queue, bind: &T)
-    where
-        T: Bind + ?Sized,
-    {
-        for group in self.groups.iter_mut() {
-            for (key, entry) in group.bindings.iter_mut() {
-                let resource = match key.kind {
-                    BindingKind::UniformBuffer => {
-                        bind.get_uniform(device, queue, key.name.as_ref(), entry.state.as_mut())
-                    }
-                    BindingKind::StorageBuffer => {
-                        bind.get_storage(device, queue, key.name.as_ref(), entry.state.as_mut())
-                    }
-                    BindingKind::Texture => {
-                        bind.get_texture(device, queue, key.name.as_ref(), entry.state.as_mut())
-                    }
-                    BindingKind::StorageTexture => bind.get_storage_texture(
-                        device,
-                        queue,
-                        key.name.as_ref(),
-                        entry.state.as_mut(),
-                    ),
-                    BindingKind::Sampler => {
-                        bind.get_sampler(device, queue, key.name.as_ref(), entry.state.as_mut())
-                    }
-                };
-
-                if resource.is_some() {
-                    if entry.resource != resource {
-                        group.bind_group = None;
-                    }
-
-                    entry.resource = resource;
+    #[inline]
+    pub fn get_index(&self, name: &str) -> Option<EntryIndex> {
+        for (group_index, group) in self.groups.iter().enumerate() {
+            for (entry_index, entry) in group.entries.iter().enumerate() {
+                if entry.name == name {
+                    return Some((group_index, entry_index));
                 }
             }
         }
+
+        None
     }
 
+    #[inline]
+    pub unsafe fn get_state<T: Any + Default + Send + Sync>(
+        &mut self,
+        (group, entry): EntryIndex,
+    ) -> &mut T {
+        let entry = unsafe {
+            self.groups
+                .get_unchecked_mut(group)
+                .entries
+                .get_unchecked_mut(entry)
+        };
+
+        let state = entry.state.get_or_insert_with(|| Box::new(T::default()));
+        state.downcast_mut::<T>().unwrap()
+    }
+
+    #[inline]
+    pub unsafe fn update_resource(
+        &mut self,
+        (group, entry): EntryIndex,
+        resource: SharedBindingResource,
+    ) {
+        let group = unsafe { self.groups.get_unchecked_mut(group) };
+        let entry = unsafe { group.entries.get_unchecked_mut(entry) };
+        if entry.update(resource) {
+            group.bind_group = None;
+        }
+    }
+
+    #[inline]
     pub fn update_bind_groups(&mut self, device: &Device) {
         for group in self.groups.iter_mut() {
             if group.bind_group.is_none() {
-                group.bind_group = Some(group.create_bind_group(device));
+                let entries = group
+                    .entries
+                    .iter()
+                    .map(|entry| {
+                        let resource = entry.resource.as_ref().unwrap();
+                        wgpu::BindGroupEntry {
+                            binding: entry.binding,
+                            resource: resource.as_binding_resource(),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let bind_group = device.create_shared_bind_group(&BindGroupDescriptor {
+                    label: None,
+                    layout: &group.layout,
+                    entries: &entries,
+                });
+
+                group.bind_group = Some(bind_group);
             }
         }
     }
 
-    #[track_caller]
-    pub fn bind_groups(&self) -> impl Iterator<Item = &BindGroup> {
+    #[inline]
+    pub fn bind_groups(&self) -> impl Iterator<Item = &SharedBindGroup> {
         self.groups
             .iter()
-            .map(|g| g.bind_group.as_ref().expect("BindGroup not created"))
+            .filter_map(|group| group.bind_group.as_ref())
     }
 
-    pub fn apply<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
+    #[inline]
+    pub fn apply<'a>(&'a self, pass: &mut RenderPass<'a>) {
         for (i, group) in self.bind_groups().enumerate() {
-            render_pass.set_bind_group(i as u32, group, &[]);
+            pass.set_bind_group(i as u32, group, &[]);
+        }
+    }
+
+    #[inline]
+    pub fn apply_compute<'a>(&'a self, pass: &mut ComputePass<'a>) {
+        for (i, group) in self.bind_groups().enumerate() {
+            pass.set_bind_group(i as u32, group, &[]);
         }
     }
 }

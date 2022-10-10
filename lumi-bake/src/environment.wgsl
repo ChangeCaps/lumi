@@ -12,10 +12,10 @@ var<uniform> side: u32;
 @group(0) @binding(3)
 var<uniform> roughness: f32;
 
-fn direction(id: vec3<u32>, dimensions: vec2<i32>) -> vec3<f32> {
+fn direction(id: vec2<u32>, side: u32, dimensions: vec2<i32>) -> vec3<f32> {
 	var direction: vec3<f32>;
 
-	let uv = vec2<f32>(id.xy) / vec2<f32>(dimensions) * 2.0 - 1.0;
+	let uv = vec2<f32>(id) / vec2<f32>(dimensions) * 2.0 - 1.0;
 
 	switch side {
 		case 0u { direction = vec3<f32>(1.0, -uv.y, -uv.x); }
@@ -45,9 +45,9 @@ fn load_eq_dir(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f32> {
 
 @compute @workgroup_size(16, 16, 1)
 fn eq_to_cube(@builtin(global_invocation_id) global_id: vec3<u32>) {
-	let direction = direction(global_id, textureDimensions(cube));
+	let direction = direction(global_id.xy, global_id.z, textureDimensions(cube));
 	let color = load_eq_dir(eq, direction);
-	textureStore(cube, vec2<i32>(global_id.xy), i32(side), color);
+	textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), color);
 }
 
 fn radical_inverse_vdc(bits: u32) -> f32 {
@@ -95,7 +95,7 @@ fn importance_sample_ggx(xi: vec2<f32>, n: vec3<f32>, roughness: f32) -> vec3<f3
 
 @compute @workgroup_size(16, 16, 1)
 fn indirect(@builtin(global_invocation_id) global_id: vec3<u32>) {
-	let direction = direction(global_id, textureDimensions(cube));
+	let direction = direction(global_id.xy, side, textureDimensions(cube));
 	
 	if roughness == 0.0 {
 		textureStore(cube, vec2<i32>(global_id.xy), i32(side), load_eq_dir(eq, direction));
@@ -126,13 +126,13 @@ fn indirect(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 @compute @workgroup_size(16, 16, 1)
 fn irradiance(@builtin(global_invocation_id) global_id: vec3<u32>) {
-	let direction = direction(global_id, textureDimensions(cube));
+	let direction = direction(global_id.xy, side, textureDimensions(cube));
 
 	let up = vec3<f32>(0.0, 1.0, 0.0);
 	let right = cross(up, direction);
 	let up = cross(direction, right);
 
-	let sample_delta = 0.025;
+	let sample_delta = 0.05;
 	var sample_count = 0.0;
 
 	var irradiance = vec3<f32>(0.0);

@@ -29,7 +29,9 @@ impl FrameBuffer {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba16Float,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_SRC,
         });
 
         let hdr_msaa = if sample_count > 1 {
@@ -149,21 +151,34 @@ impl FrameBuffer {
     pub fn begin_hdr_render_pass<'a>(
         &'a self,
         encoder: &'a mut CommandEncoder,
+        load: bool,
     ) -> wgpu::RenderPass<'a> {
+        let color_load = if load {
+            LoadOp::Load
+        } else {
+            LoadOp::Clear(Color::TRANSPARENT)
+        };
+
+        let depth_load = if load {
+            LoadOp::Load
+        } else {
+            LoadOp::Clear(1.0)
+        };
+
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Lumi HDR Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &self.hdr_msaa_view.as_ref().unwrap_or(&self.hdr_view),
                 resolve_target: self.hdr_msaa_view.as_ref().map(|_| self.hdr_view.view()),
                 ops: Operations {
-                    load: LoadOp::Clear(Color::TRANSPARENT),
+                    load: color_load,
                     store: true,
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &self.depth_view,
                 depth_ops: Some(Operations {
-                    load: LoadOp::Clear(1.0),
+                    load: depth_load,
                     store: true,
                 }),
                 stencil_ops: None,

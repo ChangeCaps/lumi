@@ -1,15 +1,17 @@
 mod attribute;
 mod buffers;
+mod prepare;
 pub mod shape;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 pub use attribute::*;
 pub use buffers::*;
+pub use prepare::*;
 
 use glam::{Mat4, Vec2, Vec3};
 
-use crate::id::MeshId;
+use crate::{aabb::Aabb, id::MeshId, material::DrawCommand, util::HashMap};
 
 /// A mesh is a collection of vertices and indices.
 ///
@@ -30,7 +32,7 @@ impl Mesh {
     /// Creates a new mesh.
     pub fn new() -> Self {
         Self {
-            attributes: HashMap::new(),
+            attributes: HashMap::default(),
             indices: None,
             id: MeshId::new(),
         }
@@ -128,6 +130,34 @@ impl Mesh {
         self.id = MeshId::new();
 
         self.indices.as_mut().map(Arc::make_mut)
+    }
+
+    pub fn draw_command(&self) -> DrawCommand {
+        if let Some(indices) = self.indices() {
+            DrawCommand::Indexed {
+                index_count: indices.len() as u32,
+                base_vertex: 0,
+            }
+        } else {
+            let len = self.positions().unwrap().len() as u32;
+            DrawCommand::Vertex { vertex_count: len }
+        }
+    }
+
+    pub fn aabb(&self) -> Option<Aabb> {
+        let positions = self.positions()?;
+
+        if positions.is_empty() {
+            return None;
+        }
+
+        let mut aabb = Aabb::ZERO;
+
+        for &position in positions {
+            aabb.add_point(position);
+        }
+
+        Some(aabb)
     }
 
     pub fn transform(&mut self, transform: Mat4) {

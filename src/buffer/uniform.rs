@@ -8,6 +8,7 @@ use wgpu::BufferUsages;
 
 use crate::{
     bind::{SharedBindingResource, SharedBufferBinding, UniformBinding},
+    bind_key::BindKey,
     Device, Queue, SharedBuffer, SharedDevice,
 };
 
@@ -96,6 +97,10 @@ where
 {
     type State = ();
 
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.bytes())
+    }
+
     fn binding(
         &self,
         device: &Device,
@@ -115,6 +120,10 @@ where
     T: ShaderType + WriteInto,
 {
     type State = ();
+
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.bytes())
+    }
 
     fn binding(
         &self,

@@ -4,6 +4,7 @@ use wgpu::TextureFormat;
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
+    bind_key::BindKey,
     Device, Queue, SharedSampler, SharedTextureView,
 };
 
@@ -77,6 +78,10 @@ impl DerefMut for NormalMap {
 impl TextureBinding for NormalMap {
     type State = ();
 
+    fn bind_key(&self) -> BindKey {
+        TextureBinding::bind_key(&self.0)
+    }
+
     fn binding(
         &self,
         device: &Device,
@@ -89,6 +94,10 @@ impl TextureBinding for NormalMap {
 
 impl SamplerBinding for NormalMap {
     type State = Option<SharedSampler>;
+
+    fn bind_key(&self) -> BindKey {
+        TextureBinding::bind_key(&self.0)
+    }
 
     fn binding(
         &self,

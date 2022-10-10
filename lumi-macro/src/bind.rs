@@ -7,10 +7,39 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    Attribute, Data, DeriveInput, Error, Token,
+    Attribute, Data, DeriveInput, Error, LitStr, Path, Token,
 };
 
 use crate::get_lumi;
+
+#[derive(Default)]
+struct TypeAttribute {
+    uniform: Option<(Path, String)>,
+}
+
+impl TypeAttribute {
+    fn new(attrs: &[Attribute]) -> Self {
+        let mut this = Self::default();
+
+        for attr in attrs {
+            if attr.path.is_ident("uniform") {
+                let uniform = attr
+                    .parse_args_with(|parser: ParseStream| {
+                        let path = parser.parse()?;
+                        let _: Token![=] = parser.parse()?;
+                        let name = parser.parse::<LitStr>()?.value();
+
+                        Ok((path, name))
+                    })
+                    .unwrap();
+
+                this.uniform = Some(uniform);
+            }
+        }
+
+        this
+    }
+}
 
 custom_keyword!(name);
 
@@ -43,14 +72,18 @@ impl ToTokens for TextureSampleType {
         match self {
             Self::Float { filterable } => {
                 if *filterable {
-                    tokens.extend(quote! { #lumi::TextureSampleType::Float { filterable: true } });
+                    tokens.extend(
+                        quote! { #lumi::wgpu::TextureSampleType::Float { filterable: true } },
+                    );
                 } else {
-                    tokens.extend(quote! { #lumi::TextureSampleType::Float { filterable: false } });
+                    tokens.extend(
+                        quote! { #lumi::wgpu::TextureSampleType::Float { filterable: false } },
+                    );
                 }
             }
-            Self::Depth => tokens.extend(quote! { #lumi::TextureSampleType::Depth }),
-            Self::Uint => tokens.extend(quote! { #lumi::TextureSampleType::Uint }),
-            Self::Sint => tokens.extend(quote! { #lumi::TextureSampleType::Sint }),
+            Self::Depth => tokens.extend(quote! { #lumi::wgpu::TextureSampleType::Depth }),
+            Self::Uint => tokens.extend(quote! { #lumi::wgpu::TextureSampleType::Uint }),
+            Self::Sint => tokens.extend(quote! { #lumi::wgpu::TextureSampleType::Sint }),
         }
     }
 }
@@ -85,12 +118,14 @@ impl ToTokens for TextureViewDimension {
         let lumi = get_lumi();
 
         match self {
-            Self::D1 => tokens.extend(quote! { #lumi::TextureViewDimension::D1 }),
-            Self::D2 => tokens.extend(quote! { #lumi::TextureViewDimension::D2 }),
-            Self::D2Array => tokens.extend(quote! { #lumi::TextureViewDimension::D2Array }),
-            Self::Cube => tokens.extend(quote! { #lumi::TextureViewDimension::Cube }),
-            Self::CubeArray => tokens.extend(quote! { #lumi::TextureViewDimension::CubeArray }),
-            Self::D3 => tokens.extend(quote! { #lumi::TextureViewDimension::D3 }),
+            Self::D1 => tokens.extend(quote! { #lumi::wgpu::TextureViewDimension::D1 }),
+            Self::D2 => tokens.extend(quote! { #lumi::wgpu::TextureViewDimension::D2 }),
+            Self::D2Array => tokens.extend(quote! { #lumi::wgpu::TextureViewDimension::D2Array }),
+            Self::Cube => tokens.extend(quote! { #lumi::wgpu::TextureViewDimension::Cube }),
+            Self::CubeArray => {
+                tokens.extend(quote! { #lumi::wgpu::TextureViewDimension::CubeArray })
+            }
+            Self::D3 => tokens.extend(quote! { #lumi::wgpu::TextureViewDimension::D3 }),
         }
     }
 }
@@ -119,22 +154,22 @@ impl Parse for TexelFormat {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ident = input.parse::<Ident>()?;
         match ident.to_string().as_str() {
-            "rgba8_unorm" => Ok(Self::Rgba8Unorm),
-            "rgba8_snorm" => Ok(Self::Rgba8Snorm),
-            "rgba8_uint" => Ok(Self::Rgba8Uint),
-            "rgba8_sint" => Ok(Self::Rgba8Sint),
-            "rgba16_uint" => Ok(Self::Rgba16Uint),
-            "rgba16_sint" => Ok(Self::Rgba16Sint),
-            "rgba16_float" => Ok(Self::Rgba16Float),
-            "r32_uint" => Ok(Self::R32Uint),
-            "r32_sint" => Ok(Self::R32Sint),
-            "r32_float" => Ok(Self::R32Float),
-            "rg32_uint" => Ok(Self::Rg32Uint),
-            "rg32_sint" => Ok(Self::Rg32Sint),
-            "rg32_float" => Ok(Self::Rg32Float),
-            "rgba32_uint" => Ok(Self::Rgba32Uint),
-            "rgba32_sint" => Ok(Self::Rgba32Sint),
-            "rgba32_float" => Ok(Self::Rgba32Float),
+            "rgba8unorm" => Ok(Self::Rgba8Unorm),
+            "rgba8snorm" => Ok(Self::Rgba8Snorm),
+            "rgba8uint" => Ok(Self::Rgba8Uint),
+            "rgba8sint" => Ok(Self::Rgba8Sint),
+            "rgba16uint" => Ok(Self::Rgba16Uint),
+            "rgba16sint" => Ok(Self::Rgba16Sint),
+            "rgba16float" => Ok(Self::Rgba16Float),
+            "r32uint" => Ok(Self::R32Uint),
+            "r32sint" => Ok(Self::R32Sint),
+            "r32float" => Ok(Self::R32Float),
+            "rg32uint" => Ok(Self::Rg32Uint),
+            "rg32sint" => Ok(Self::Rg32Sint),
+            "rg32float" => Ok(Self::Rg32Float),
+            "rgba32uint" => Ok(Self::Rgba32Uint),
+            "rgba32sint" => Ok(Self::Rgba32Sint),
+            "rgba32float" => Ok(Self::Rgba32Float),
             _ => Err(Error::new(ident.span(), "invalid texel format")),
         }
     }
@@ -145,22 +180,22 @@ impl ToTokens for TexelFormat {
         let lumi = get_lumi();
 
         match self {
-            Self::Rgba8Unorm => tokens.extend(quote! { #lumi::TextureFormat::Rgba8Unorm }),
-            Self::Rgba8Snorm => tokens.extend(quote! { #lumi::TextureFormat::Rgba8Snorm }),
-            Self::Rgba8Uint => tokens.extend(quote! { #lumi::TextureFormat::Rgba8Uint }),
-            Self::Rgba8Sint => tokens.extend(quote! { #lumi::TextureFormat::Rgba8Sint }),
-            Self::Rgba16Uint => tokens.extend(quote! { #lumi::TextureFormat::Rgba16Uint }),
-            Self::Rgba16Sint => tokens.extend(quote! { #lumi::TextureFormat::Rgba16Sint }),
-            Self::Rgba16Float => tokens.extend(quote! { #lumi::TextureFormat::Rgba16Float }),
-            Self::R32Uint => tokens.extend(quote! { #lumi::TextureFormat::R32Uint }),
-            Self::R32Sint => tokens.extend(quote! { #lumi::TextureFormat::R32Sint }),
-            Self::R32Float => tokens.extend(quote! { #lumi::TextureFormat::R32Float }),
-            Self::Rg32Uint => tokens.extend(quote! { #lumi::TextureFormat::Rg32Uint }),
-            Self::Rg32Sint => tokens.extend(quote! { #lumi::TextureFormat::Rg32Sint }),
-            Self::Rg32Float => tokens.extend(quote! { #lumi::TextureFormat::Rg32Float }),
-            Self::Rgba32Uint => tokens.extend(quote! { #lumi::TextureFormat::Rgba32Uint }),
-            Self::Rgba32Sint => tokens.extend(quote! { #lumi::TextureFormat::Rgba32Sint }),
-            Self::Rgba32Float => tokens.extend(quote! { #lumi::TextureFormat::Rgba32Float }),
+            Self::Rgba8Unorm => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba8Unorm }),
+            Self::Rgba8Snorm => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba8Snorm }),
+            Self::Rgba8Uint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba8Uint }),
+            Self::Rgba8Sint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba8Sint }),
+            Self::Rgba16Uint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba16Uint }),
+            Self::Rgba16Sint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba16Sint }),
+            Self::Rgba16Float => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba16Float }),
+            Self::R32Uint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::R32Uint }),
+            Self::R32Sint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::R32Sint }),
+            Self::R32Float => tokens.extend(quote! { #lumi::wgpu::TextureFormat::R32Float }),
+            Self::Rg32Uint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rg32Uint }),
+            Self::Rg32Sint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rg32Sint }),
+            Self::Rg32Float => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rg32Float }),
+            Self::Rgba32Uint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba32Uint }),
+            Self::Rgba32Sint => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba32Sint }),
+            Self::Rgba32Float => tokens.extend(quote! { #lumi::wgpu::TextureFormat::Rgba32Float }),
         }
     }
 }
@@ -175,10 +210,6 @@ enum BindingType {
 }
 
 impl BindingType {
-    pub fn is_storage(&self) -> bool {
-        matches!(self, Self::StorageBuffer | Self::StorageTexture)
-    }
-
     pub fn is_texture(&self) -> bool {
         matches!(self, Self::Texture | Self::StorageTexture)
     }
@@ -198,6 +229,39 @@ impl ToTokens for BindingType {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Access {
+    ReadOnly,
+    WriteOnly,
+    ReadWrite,
+}
+
+impl Parse for Access {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident = input.parse::<Ident>()?;
+        match ident.to_string().as_str() {
+            "read" => Ok(Self::ReadOnly),
+            "write" => Ok(Self::WriteOnly),
+            "read_write" => Ok(Self::ReadWrite),
+            _ => Err(Error::new(ident.span(), "invalid access")),
+        }
+    }
+}
+
+impl ToTokens for Access {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let lumi = get_lumi();
+
+        let access = match self {
+            Self::ReadOnly => quote!(#lumi::wgpu::StorageTextureAccess::ReadOnly),
+            Self::WriteOnly => quote!(#lumi::wgpu::StorageTextureAccess::WriteOnly),
+            Self::ReadWrite => quote!(#lumi::wgpu::StorageTextureAccess::ReadWrite),
+        };
+
+        tokens.extend(access);
+    }
+}
+
 #[derive(Default)]
 struct BindingAttribute {
     name: Option<String>,
@@ -206,6 +270,7 @@ struct BindingAttribute {
     view_dimension: Option<TextureViewDimension>,
     multisampled: Option<bool>,
     texel_format: Option<TexelFormat>,
+    access: Option<Access>,
     filtering: Option<bool>,
 }
 
@@ -245,6 +310,13 @@ impl BindingAttribute {
         if let Some(texel_format) = self.texel_format {
             changes.push(quote! {match &mut entry.ty {
                 #lumi::BindingType::StorageTexture { format, .. } => *format = #texel_format,
+                _ => {}
+            }});
+        }
+
+        if let Some(access) = self.access {
+            changes.push(quote! {match &mut entry.ty {
+                #lumi::BindingType::StorageTexture { access, .. } => *access = #access,
                 _ => {}
             }});
         }
@@ -309,7 +381,7 @@ impl AttributeInfo {
                                 let name = parser.parse::<syn::LitStr>()?;
                                 binding.name = Some(name.value());
                             }
-                            "read_only" if ty.is_storage() => {
+                            "read_only" if ty == BindingType::StorageBuffer => {
                                 parser.parse::<Token![=]>()?;
                                 let read_only = parser.parse::<syn::LitBool>()?;
                                 binding.read_only = Some(read_only.value);
@@ -333,6 +405,11 @@ impl AttributeInfo {
                                 parser.parse::<Token![=]>()?;
                                 let texel_format = parser.parse::<TexelFormat>()?;
                                 binding.texel_format = Some(texel_format);
+                            }
+                            "access" if ty == BindingType::StorageTexture => {
+                                parser.parse::<Token![=]>()?;
+                                let access = parser.parse::<Access>()?;
+                                binding.access = Some(access);
                             }
                             "filtering" if ty == BindingType::Sampler => {
                                 parser.parse::<Token![=]>()?;
@@ -365,52 +442,51 @@ pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let lumi = get_lumi();
 
     let ident = input.ident;
+    let type_attr = TypeAttribute::new(&input.attrs);
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let entries_impl = impl_entries(&input.data, &lumi);
-
-    macro_rules! impl_bind {
-        ($ty:ident, $fn:ident) => {{
-            let bind_impl = impl_bind(&input.data, &lumi, BindingType::$ty);
-
-            quote! {
-                fn $fn(
-                    &self,
-                    device: &#lumi::Device,
-                    queue: &#lumi::Queue,
-                    name: &::std::primitive::str,
-                    state: &mut dyn ::std::any::Any,
-                ) -> ::std::option::Option<#lumi::bind::SharedBindingResource> {
-                    #bind_impl
-                }
-            }
-        }};
-    }
-
-    let uniform_impl = impl_bind!(UniformBuffer, get_uniform);
-    let storage_impl = impl_bind!(StorageBuffer, get_storage);
-    let texture_impl = impl_bind!(Texture, get_texture);
-    let storage_texture_impl = impl_bind!(StorageTexture, get_storage_texture);
-    let sampler_impl = impl_bind!(Sampler, get_sampler);
+    let entries_impl = impl_entries(&input.data, &type_attr, &lumi);
+    let bind_key_impl = impl_bind_key(&input.data, &type_attr, &lumi);
+    let bind_impl = impl_bind(&input.data, &type_attr, &lumi);
 
     let expanded = quote! {
+        #[automatically_derived]
         impl #impl_generics #lumi::bind::Bind for #ident #ty_generics #where_clause {
+            #[inline(always)]
             fn entries() -> ::std::collections::LinkedList<#lumi::bind::BindingLayoutEntry> {
                 #entries_impl
             }
 
-            #uniform_impl
-            #storage_impl
-            #texture_impl
-            #storage_texture_impl
-            #sampler_impl
+            #[inline(always)]
+            fn bind_key(&self) -> #lumi::bind_key::BindKey {
+                #bind_key_impl
+            }
+
+            #[inline(always)]
+            fn bind(
+                &self,
+                device: &#lumi::Device,
+                queue: &#lumi::Queue,
+                bindings: &mut #lumi::binding::Bindings,
+            ) {
+                #bind_impl
+            }
         }
     };
 
     expanded.into()
 }
 
-fn impl_entries(data: &Data, lumi: &syn::Path) -> TokenStream {
+fn impl_entries(data: &Data, type_attr: &TypeAttribute, lumi: &syn::Path) -> TokenStream {
+    let type_uniform = if let Some((ref uniform, ref name)) = type_attr.uniform {
+        quote! {
+            let mut entry = <#uniform as #lumi::bind::UniformBinding>::entry();
+            entries.push_back(entry.into_layout_entry::<<#uniform as #lumi::bind::UniformBinding>::State>(#name));
+        }
+    } else {
+        quote!()
+    };
+
     match data {
         Data::Struct(data) => {
             let fields = data.fields.iter().map(|field| {
@@ -446,6 +522,8 @@ fn impl_entries(data: &Data, lumi: &syn::Path) -> TokenStream {
             quote! {
                 let mut entries = ::std::collections::LinkedList::new();
 
+                #type_uniform
+
                 #( #fields )*
 
                 entries
@@ -455,7 +533,73 @@ fn impl_entries(data: &Data, lumi: &syn::Path) -> TokenStream {
     }
 }
 
-fn impl_bind(data: &Data, lumi: &syn::Path, binding_ty: BindingType) -> TokenStream {
+fn impl_bind_key(data: &Data, type_attr: &TypeAttribute, lumi: &syn::Path) -> TokenStream {
+    let type_uniform = if let Some((ref uniform, _)) = type_attr.uniform {
+        quote! {
+            let type_uniform = ::std::convert::From::<&Self>::from(self);
+            key ^= <#uniform as #lumi::bind::UniformBinding>::bind_key(&type_uniform);
+        }
+    } else {
+        quote!()
+    };
+
+    match data {
+        Data::Struct(data) => {
+            let fields = data.fields.iter().enumerate().map(|(i, field)| {
+                let ty = &field.ty;
+
+                let index = syn::Index::from(i);
+                let field_ident = match &field.ident {
+                    Some(ident) => quote!(#ident),
+                    None => quote!(#index),
+                };
+
+                let attrs = AttributeInfo::new(&field.attrs).unwrap();
+
+                let mut bind_keys = Vec::new();
+                for binding_ty in attrs.bindings.keys() {
+                    let bind_key = quote_spanned! {field.ident.span()=>
+                        key ^= <#ty as #lumi::bind::#binding_ty>::bind_key(&self.#field_ident);
+                    };
+                    bind_keys.push(bind_key);
+                }
+
+                quote! {
+                    #(#bind_keys)*
+                }
+            });
+
+            quote! {
+                let mut key = #lumi::bind_key::BindKey::ZERO;
+
+                #type_uniform
+                #(#fields)*
+
+                key
+            }
+        }
+        _ => unimplemented!("Bind must be derived for structs"),
+    }
+}
+
+fn impl_bind(data: &Data, type_attr: &TypeAttribute, lumi: &syn::Path) -> TokenStream {
+    let type_uniform = if let Some((ref uniform, ref name)) = type_attr.uniform {
+        quote! {
+            if let Some(index) = bindings.get_index(#name) {
+                let state = unsafe { bindings.get_state(index) };
+                let resource = <#uniform as #lumi::bind::UniformBinding>::binding(
+                    &::std::convert::From::<&Self>::from(self),
+                    device,
+                    queue,
+                    state,
+                );
+                unsafe { bindings.update_resource(index, resource) };
+            }
+        }
+    } else {
+        quote!()
+    };
+
     match data {
         Data::Struct(data) => {
             let fields = data.fields.iter().enumerate().map(|(i, field)| {
@@ -470,26 +614,34 @@ fn impl_bind(data: &Data, lumi: &syn::Path, binding_ty: BindingType) -> TokenStr
                 let name = field.ident.clone().unwrap().to_string();
                 let attrs = AttributeInfo::new(&field.attrs).unwrap();
 
-                if let Some(attr) = attrs.bindings.get(&binding_ty) {
+                let mut bindings = Vec::new();
+                for (binding_ty, attr) in attrs.bindings.iter() {
                     let name = attr.name.as_ref().unwrap_or(&name);
-                    quote_spanned! {field.ident.span()=>
-                        #name => Some(<#ty as #lumi::bind::#binding_ty>::binding(
-                            &self.#field_ident,
-                            device,
-                            queue,
-                            state.downcast_mut().unwrap(),
-                        )),
-                    }
-                } else {
-                    quote!()
+
+                    let binding = quote_spanned! {field.ident.span()=>
+                        if let Some(index) = bindings.get_index(#name) {
+                            let state = unsafe { bindings.get_state(index) };
+                            let resource = <#ty as #lumi::bind::#binding_ty>::binding(
+                                &self.#field_ident,
+                                device,
+                                queue,
+                                state,
+                            );
+                            unsafe { bindings.update_resource(index, resource) };
+                        }
+                    };
+
+                    bindings.push(binding);
+                }
+
+                quote! {
+                    #(#bindings)*
                 }
             });
 
             quote! {
-                match name {
-                    #( #fields )*
-                    _ => None,
-                }
+                #type_uniform
+                #( #fields )*
             }
         }
         _ => unimplemented!("Bind must be derived for structs"),

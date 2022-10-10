@@ -15,15 +15,23 @@ use crate::{
     Device, Queue, SharedDevice, SharedTexture, SharedTextureView,
 };
 
-struct MipChain {
-    texture: SharedTexture,
-    views: Vec<SharedTextureView>,
-    bindings: Vec<Bindings>,
+pub struct MipChain {
+    pub texture: SharedTexture,
+    pub view: SharedTextureView,
+    pub mip_level_count: Option<u32>,
+    pub views: Vec<SharedTextureView>,
+    pub bindings: Vec<Bindings>,
 }
 
 impl MipChain {
-    pub fn new(device: &Device, layout: &BindingsLayout, width: u32, height: u32) -> Self {
-        let mip_level_count = Self::mip_levels_for_size(width, height);
+    pub fn new(
+        device: &Device,
+        layout: &BindingsLayout,
+        width: u32,
+        height: u32,
+        mip_level_count: Option<u32>,
+    ) -> Self {
+        let mips = mip_level_count.unwrap_or(Self::mip_levels_for_size(width, height));
         let texture = device.create_shared_texture(&wgpu::TextureDescriptor {
             label: Some("Lumi MipChain texture"),
             size: Extent3d {
@@ -31,16 +39,17 @@ impl MipChain {
                 height,
                 depth_or_array_layers: 1,
             },
-            mip_level_count,
+            mip_level_count: mips,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: TextureFormat::Rgba16Float,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
         });
+        let view = texture.create_view(&Default::default());
 
-        let mut views = Vec::with_capacity(mip_level_count as usize);
+        let mut views = Vec::with_capacity(mips as usize);
 
-        for i in 0..mip_level_count {
+        for i in 0..mips {
             views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some("Lumi MipChain view"),
                 base_mip_level: i,
@@ -49,12 +58,12 @@ impl MipChain {
             }));
         }
 
-        let bindings = (0..mip_level_count)
-            .map(|_| layout.create_bindings(device))
-            .collect();
+        let bindings = (0..mips).map(|_| layout.create_bindings(device)).collect();
 
         Self {
             texture,
+            view,
+            mip_level_count,
             views,
             bindings,
         }
@@ -106,6 +115,58 @@ impl MipChain {
         let min_dimension = u32::min(self.width(), self.height());
         (min_dimension >> self.mip_levels()) as f32 / 4.0
     }
+
+    pub fn prepare_downsample_bindings(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        source: &SharedTextureView,
+        scale: f32,
+    ) {
+        let scale = if self.mip_level_count.is_some() {
+            scale
+        } else {
+            self.filter_scale() * scale
+        };
+
+        self.bindings[0].bind(
+            device,
+            queue,
+            &DownsampleBindings {
+                source_texture: source,
+                scale: scale * 0.1,
+                threshold: 0.0,
+                curve: Vec3::ZERO,
+            },
+        );
+
+        self.bindings[0].update_bind_groups(device);
+
+        for mip in 1..self.mip_levels() as usize {
+            self.bindings[mip].bind(
+                device,
+                queue,
+                &DownsampleBindings {
+                    source_texture: &self.views[mip - 1],
+                    scale,
+                    threshold: 0.0,
+                    curve: Vec3::ZERO,
+                },
+            );
+
+            self.bindings[mip].update_bind_groups(device);
+        }
+    }
+
+    pub fn downsample(&self, pipeline: &BloomPipeline, encoder: &mut CommandEncoder) {
+        for mip in 0..self.mip_levels() {
+            let mut pass = self.begin_render_pass(encoder, mip);
+
+            pass.set_pipeline(&pipeline.downsample_pipeline);
+            self.bindings[mip as usize].apply(&mut pass);
+            pass.draw(0..3, 0..1);
+        }
+    }
 }
 
 #[derive(Bind)]
@@ -132,29 +193,22 @@ pub struct UpsampleBindings<'a> {
     pub source_mip_texture: &'a SharedTextureView,
 }
 
-pub struct Bloom {
-    down: MipChain,
-    up: MipChain,
-    down_layout: BindingsLayout,
-    up_layout: BindingsLayout,
-    downsample_pipeline: RenderPipeline,
-    upsample_pipeline: RenderPipeline,
+pub struct BloomPipeline {
+    pub down_layout: BindingsLayout,
+    pub up_layout: BindingsLayout,
+    pub downsample_pipeline: RenderPipeline,
+    pub upsample_pipeline: RenderPipeline,
 }
 
-impl Bloom {
-    pub fn new(
-        device: &Device,
-        shader_processor: &mut ShaderProcessor,
-        width: u32,
-        height: u32,
-    ) -> Self {
+impl BloomPipeline {
+    pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
         let mut vertex = shader_processor
             .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
             .unwrap();
         let mut fragment = shader_processor
             .process(ShaderRef::module("lumi/bloom_frag.wgsl"))
             .unwrap();
-        vertex.rebind(&mut fragment).unwrap();
+        vertex.rebind_with(&mut fragment).unwrap();
 
         let down_layout = BindingsLayout::new()
             .with_shader(&vertex)
@@ -165,9 +219,6 @@ impl Bloom {
             .with_shader(&vertex)
             .with_shader(&fragment)
             .bind::<UpsampleBindings>();
-
-        let down = MipChain::new(device, &down_layout, width, height);
-        let up = MipChain::new(device, &up_layout, width, height);
 
         let bind_group_layouts = down_layout.create_bind_group_layouts(device);
         let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
@@ -243,19 +294,31 @@ impl Bloom {
         });
 
         Self {
-            down,
-            up,
             down_layout,
             up_layout,
             downsample_pipeline,
             upsample_pipeline,
         }
     }
+}
 
-    pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
+pub struct Bloom {
+    down: MipChain,
+    up: MipChain,
+}
+
+impl Bloom {
+    pub fn new(device: &Device, pipeline: &BloomPipeline, width: u32, height: u32) -> Self {
+        let down = MipChain::new(device, &pipeline.down_layout, width, height, None);
+        let up = MipChain::new(device, &pipeline.up_layout, width, height, None);
+
+        Self { down, up }
+    }
+
+    pub fn resize(&mut self, device: &Device, pipeline: &BloomPipeline, width: u32, height: u32) {
         if self.down.width() != width || self.down.height() != height {
-            self.down = MipChain::new(device, &self.down_layout, width, height);
-            self.up = MipChain::new(device, &self.up_layout, width, height);
+            self.down = MipChain::new(device, &pipeline.down_layout, width, height, None);
+            self.up = MipChain::new(device, &pipeline.up_layout, width, height, None);
         }
     }
 
@@ -263,6 +326,7 @@ impl Bloom {
         &mut self,
         device: &Device,
         queue: &Queue,
+        pipeline: &BloomPipeline,
         encoder: &mut CommandEncoder,
         source: &SharedTextureView,
         threshold: f32,
@@ -324,7 +388,7 @@ impl Bloom {
         for mip in 0..self.down.mip_levels() {
             let mut pass = self.down.begin_render_pass(encoder, mip);
 
-            pass.set_pipeline(&self.downsample_pipeline);
+            pass.set_pipeline(&pipeline.downsample_pipeline);
             self.down.bindings[mip as usize].apply(&mut pass);
             pass.draw(0..3, 0..1);
         }
@@ -332,7 +396,7 @@ impl Bloom {
         for mip in (1..self.up.mip_levels()).rev() {
             let mut pass = self.up.begin_render_pass(encoder, mip);
 
-            pass.set_pipeline(&self.upsample_pipeline);
+            pass.set_pipeline(&pipeline.upsample_pipeline);
             self.up.bindings[mip as usize].apply(&mut pass);
             pass.draw(0..3, 0..1);
         }
@@ -350,7 +414,7 @@ impl Bloom {
             depth_stencil_attachment: None,
         });
 
-        pass.set_pipeline(&self.upsample_pipeline);
+        pass.set_pipeline(&pipeline.upsample_pipeline);
         self.up.bindings[0].apply(&mut pass);
         pass.draw(0..3, 0..1);
     }

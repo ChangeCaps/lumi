@@ -7,6 +7,7 @@ use std::{
 
 use encase::{internal::WriteInto, ShaderType};
 use once_cell::sync::OnceCell;
+use smallvec::SmallVec;
 use wgpu::{
     BindingResource, BindingType, BufferBinding, BufferBindingType, BufferUsages,
     SamplerBindingType, ShaderStages, StorageTextureAccess, TextureFormat, TextureSampleType,
@@ -16,7 +17,8 @@ use wgpu::{
 pub use lumi_macro::Bind;
 
 use crate::{
-    bind_key::BindKey, Device, Queue, SharedBuffer, SharedDevice, SharedSampler, SharedTextureView,
+    bind_key::BindKey, binding::Bindings, Device, Queue, SharedBuffer, SharedDevice, SharedSampler,
+    SharedTextureView,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,7 +52,6 @@ impl SharedBindingResource {
 #[derive(Clone, Debug)]
 pub struct BindingLayoutEntry {
     pub name: Cow<'static, str>,
-    pub state: fn() -> Box<dyn Any + Send + Sync>,
     pub visibility: ShaderStages,
     pub ty: BindingType,
     pub count: Option<NonZeroU32>,
@@ -61,45 +62,9 @@ pub trait Bind {
     where
         Self: Sized;
 
-    fn get_uniform(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        name: &str,
-        state: &mut dyn Any,
-    ) -> Option<SharedBindingResource>;
+    fn bind_key(&self) -> BindKey;
 
-    fn get_storage(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        name: &str,
-        state: &mut dyn Any,
-    ) -> Option<SharedBindingResource>;
-
-    fn get_texture(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        name: &str,
-        state: &mut dyn Any,
-    ) -> Option<SharedBindingResource>;
-
-    fn get_storage_texture(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        name: &str,
-        state: &mut dyn Any,
-    ) -> Option<SharedBindingResource>;
-
-    fn get_sampler(
-        &self,
-        device: &Device,
-        queue: &Queue,
-        name: &str,
-        state: &mut dyn Any,
-    ) -> Option<SharedBindingResource>;
+    fn bind(&self, device: &Device, queue: &Queue, bindings: &mut Bindings);
 }
 
 pub struct BindLayoutEntry {
@@ -114,7 +79,6 @@ impl BindLayoutEntry {
     ) -> BindingLayoutEntry {
         BindingLayoutEntry {
             name: name.into(),
-            state: || Box::new(T::default()),
             visibility: ShaderStages::all(),
             ty: self.ty,
             count: self.count,
@@ -135,6 +99,8 @@ pub trait UniformBinding {
             count: None,
         }
     }
+
+    fn bind_key(&self) -> BindKey;
 
     fn binding(
         &self,
@@ -158,6 +124,8 @@ pub trait StorageBinding {
         }
     }
 
+    fn bind_key(&self) -> BindKey;
+
     fn binding(
         &self,
         device: &Device,
@@ -180,6 +148,8 @@ pub trait TextureBinding {
         }
     }
 
+    fn bind_key(&self) -> BindKey;
+
     fn binding(
         &self,
         device: &Device,
@@ -194,13 +164,15 @@ pub trait StorageTextureBinding {
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
             ty: BindingType::StorageTexture {
-                access: StorageTextureAccess::ReadOnly,
+                access: StorageTextureAccess::WriteOnly,
                 format: TextureFormat::Rgba8UnormSrgb,
                 view_dimension: TextureViewDimension::D2,
             },
             count: None,
         }
     }
+
+    fn bind_key(&self) -> BindKey;
 
     fn binding(
         &self,
@@ -219,6 +191,8 @@ pub trait SamplerBinding {
             count: None,
         }
     }
+
+    fn bind_key(&self) -> BindKey;
 
     fn binding(
         &self,
@@ -249,6 +223,16 @@ pub trait DefaultTexture {
 impl<T: TextureBinding + DefaultTexture> TextureBinding for Option<T> {
     type State = DefaultBindingState<T::State, SharedTextureView>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        if let Some(texture) = self {
+            texture.bind_key()
+        } else {
+            BindKey::ZERO
+        }
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -275,6 +259,16 @@ pub trait DefaultSampler {
 impl<T: SamplerBinding + DefaultSampler> SamplerBinding for Option<T> {
     type State = DefaultBindingState<T::State, SharedSampler>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        if let Some(sampler) = self {
+            sampler.bind_key()
+        } else {
+            BindKey::ZERO
+        }
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -302,6 +296,7 @@ pub struct UniformBindingState {
 impl<T: ShaderType + WriteInto> UniformBinding for T {
     type State = Option<UniformBindingState>;
 
+    #[inline]
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
             ty: BindingType::Buffer {
@@ -313,15 +308,27 @@ impl<T: ShaderType + WriteInto> UniformBinding for T {
         }
     }
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        let mut data = SmallVec::<[u8; 256]>::new();
+        data.resize(self.size().get() as usize, 0u8);
+        let mut uniform_buffer = encase::UniformBuffer::new(data.as_mut_slice());
+        uniform_buffer.write(self).unwrap();
+
+        BindKey::from_hash(&data)
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
         queue: &Queue,
         state: &mut Self::State,
     ) -> SharedBindingResource {
-        let mut data = encase::UniformBuffer::new(Vec::<u8>::new());
-        data.write(self).unwrap();
-        let data = data.into_inner();
+        let mut data = SmallVec::<[u8; 256]>::new();
+        data.resize(self.size().get() as usize, 0u8);
+        let mut uniform_buffer = encase::UniformBuffer::new(data.as_mut_slice());
+        uniform_buffer.write(self).unwrap();
 
         if let Some(state) = state {
             if state.buffer.size() < data.len() as u64 {

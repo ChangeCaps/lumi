@@ -1,9 +1,10 @@
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BufferDescriptor, Device, Queue, SamplerDescriptor, TextureDescriptor,
+    BindGroupDescriptor, BufferDescriptor, Device, Queue, RenderPipelineDescriptor,
+    SamplerDescriptor, TextureDescriptor,
 };
 
-use crate::{SharedBuffer, SharedSampler, SharedTexture};
+use crate::{SharedBindGroup, SharedBuffer, SharedRenderPipeline, SharedSampler, SharedTexture};
 
 pub trait SharedDevice {
     fn create_shared_buffer(&self, desc: &BufferDescriptor) -> SharedBuffer;
@@ -16,6 +17,11 @@ pub trait SharedDevice {
         data: &[u8],
     ) -> SharedTexture;
     fn create_shared_sampler(&self, desc: &SamplerDescriptor) -> SharedSampler;
+    fn create_shared_bind_group(&self, desc: &BindGroupDescriptor) -> SharedBindGroup;
+    fn create_shared_render_pipeline(
+        &self,
+        desc: &RenderPipelineDescriptor,
+    ) -> SharedRenderPipeline;
 }
 
 impl SharedDevice for Device {
@@ -47,5 +53,18 @@ impl SharedDevice for Device {
     fn create_shared_sampler(&self, desc: &SamplerDescriptor) -> SharedSampler {
         let sampler = self.create_sampler(desc);
         SharedSampler::new(sampler, desc)
+    }
+
+    fn create_shared_bind_group(&self, desc: &BindGroupDescriptor) -> SharedBindGroup {
+        let bind_group = self.create_bind_group(desc);
+        SharedBindGroup::new(bind_group)
+    }
+
+    fn create_shared_render_pipeline(
+        &self,
+        desc: &RenderPipelineDescriptor,
+    ) -> SharedRenderPipeline {
+        let render_pipeline = self.create_render_pipeline(desc);
+        SharedRenderPipeline::new(render_pipeline)
     }
 }

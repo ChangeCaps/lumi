@@ -3,14 +3,13 @@ mod processor;
 
 use std::{
     borrow::Cow,
-    collections::HashMap,
     path::{Path, PathBuf},
 };
 
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use wgpu::{ShaderModule, ShaderSource};
 
-use crate::Device;
+use crate::{util::HashMap, Device};
 
 pub use io::*;
 pub use processor::*;
@@ -19,6 +18,8 @@ pub use processor::*;
 pub enum DefaultShader {
     Vertex,
     Fragment,
+    ShadowVertex,
+    ShadowFragment,
     Sky,
 }
 
@@ -74,37 +75,21 @@ pub struct Shader {
 }
 
 impl Shader {
-    fn rebind_modules(
-        this: &mut naga::Module,
-        other: &mut naga::Module,
-    ) -> Result<(), ShaderError> {
-        let mut bindings = HashMap::<Option<String>, u32>::new();
+    fn rebind_modules(modules: &mut [&mut naga::Module]) -> Result<(), ShaderError> {
+        let mut bindings = HashMap::<Option<String>, u32>::default();
 
-        for (_handle, variable) in this.global_variables.iter_mut() {
-            if let Some(ref mut binding) = variable.binding {
-                match bindings.get(&variable.name) {
-                    Some(&rebinding) => {
-                        binding.binding = rebinding;
-                    }
-                    None => {
-                        binding.binding = bindings.len() as u32;
+        for module in modules {
+            for (_handle, variable) in module.global_variables.iter_mut() {
+                if let Some(ref mut binding) = variable.binding {
+                    match bindings.get(&variable.name) {
+                        Some(&rebinding) => {
+                            binding.binding = rebinding;
+                        }
+                        None => {
+                            binding.binding = bindings.len() as u32;
 
-                        bindings.insert(variable.name.clone(), binding.binding);
-                    }
-                }
-            }
-        }
-
-        for (_handle, variable) in other.global_variables.iter_mut() {
-            if let Some(ref mut binding) = variable.binding {
-                match bindings.get(&variable.name) {
-                    Some(&rebinding) => {
-                        binding.binding = rebinding;
-                    }
-                    None => {
-                        binding.binding = bindings.len() as u32;
-
-                        bindings.insert(variable.name.clone(), binding.binding);
+                            bindings.insert(variable.name.clone(), binding.binding);
+                        }
                     }
                 }
             }
@@ -113,8 +98,12 @@ impl Shader {
         Ok(())
     }
 
-    pub fn rebind(&mut self, other: &mut Self) -> Result<(), ShaderError> {
-        Self::rebind_modules(&mut self.module, &mut other.module)?;
+    pub fn rebind(&mut self) -> Result<(), ShaderError> {
+        Self::rebind_modules(&mut [&mut self.module])
+    }
+
+    pub fn rebind_with(&mut self, other: &mut Self) -> Result<(), ShaderError> {
+        Self::rebind_modules(&mut [&mut self.module, &mut other.module])?;
 
         Ok(())
     }

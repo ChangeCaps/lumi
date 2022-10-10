@@ -34,9 +34,13 @@ ids! {
     pub struct TextureId;
     pub struct TextureViewId;
     pub struct SamplerId;
+    pub struct BindGroupId;
+    pub struct RenderPipelineId;
+    pub struct ComputePipelineId;
     pub struct ShaderId;
     pub struct EnvironmentId;
     pub struct MeshId;
+    pub struct WorldId;
     pub struct NodeId;
     pub struct LightId;
     pub struct CameraId;

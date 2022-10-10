@@ -8,13 +8,14 @@ use wgpu::{
 
 use crate::{
     bind::{SamplerBinding, SharedBindingResource, StorageTextureBinding, TextureBinding},
+    bind_key::BindKey,
     id::{TextureId, TextureViewId},
     SharedDevice, SharedSampler,
 };
 
-#[derive(Clone, Debug)]
-pub struct SharedTexture {
-    texture: Arc<wgpu::Texture>,
+#[derive(Debug)]
+struct SharedTextureInner {
+    texture: wgpu::Texture,
     id: TextureId,
 
     size: Extent3d,
@@ -25,78 +26,99 @@ pub struct SharedTexture {
     usage: TextureUsages,
 }
 
+#[derive(Clone, Debug)]
+pub struct SharedTexture {
+    inner: Arc<SharedTextureInner>,
+}
+
 impl SharedTexture {
+    #[inline]
     pub fn new(texture: wgpu::Texture, desc: &TextureDescriptor) -> Self {
         Self {
-            texture: Arc::new(texture),
-            id: TextureId::new(),
-            size: desc.size,
-            mip_level_count: desc.mip_level_count,
-            sample_count: desc.sample_count,
-            dimension: desc.dimension,
-            format: desc.format,
-            usage: desc.usage,
+            inner: Arc::new(SharedTextureInner {
+                texture,
+                id: TextureId::new(),
+
+                size: desc.size,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                dimension: desc.dimension,
+                format: desc.format,
+                usage: desc.usage,
+            }),
         }
     }
 
+    #[inline]
     pub fn texture(&self) -> &wgpu::Texture {
-        &self.texture
+        &self.inner.texture
     }
 
+    #[inline]
     pub fn id(&self) -> TextureId {
-        self.id
+        self.inner.id
     }
 
+    #[inline]
     pub fn size(&self) -> Extent3d {
-        self.size
+        self.inner.size
     }
 
+    #[inline]
     pub fn mip_level_count(&self) -> u32 {
-        self.mip_level_count
+        self.inner.mip_level_count
     }
 
+    #[inline]
     pub fn sample_count(&self) -> u32 {
-        self.sample_count
+        self.inner.sample_count
     }
 
+    #[inline]
     pub fn dimension(&self) -> TextureDimension {
-        self.dimension
+        self.inner.dimension
     }
 
+    #[inline]
     pub fn format(&self) -> TextureFormat {
-        self.format
+        self.inner.format
     }
 
+    #[inline]
     pub fn usage(&self) -> TextureUsages {
-        self.usage
+        self.inner.usage
     }
 
+    #[inline]
     pub fn desc(&self) -> TextureDescriptor {
         TextureDescriptor {
             label: None,
-            size: self.size,
-            mip_level_count: self.mip_level_count,
-            sample_count: self.sample_count,
-            dimension: self.dimension,
-            format: self.format,
-            usage: self.usage,
+            size: self.inner.size,
+            mip_level_count: self.inner.mip_level_count,
+            sample_count: self.inner.sample_count,
+            dimension: self.inner.dimension,
+            format: self.inner.format,
+            usage: self.inner.usage,
         }
     }
 
+    #[inline]
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> SharedTextureView {
-        SharedTextureView::new(self.texture.create_view(desc), &self.desc(), desc)
+        SharedTextureView::new(self.inner.texture.create_view(desc), &self.desc(), desc)
     }
 }
 
 impl Deref for SharedTexture {
     type Target = wgpu::Texture;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         self.texture()
     }
 }
 
 impl PartialEq for SharedTexture {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
@@ -104,9 +126,9 @@ impl PartialEq for SharedTexture {
 
 impl Eq for SharedTexture {}
 
-#[derive(Clone, Debug)]
-pub struct SharedTextureView {
-    view: Arc<wgpu::TextureView>,
+#[derive(Debug)]
+struct SharedTextureViewInner {
+    view: wgpu::TextureView,
     id: TextureViewId,
 
     size: Extent3d,
@@ -120,81 +142,103 @@ pub struct SharedTextureView {
     base_array_layer: u32,
 }
 
+#[derive(Clone, Debug)]
+pub struct SharedTextureView {
+    inner: Arc<SharedTextureViewInner>,
+}
+
 impl SharedTextureView {
+    #[inline]
     pub fn new(
         view: wgpu::TextureView,
         texture_desc: &TextureDescriptor,
         view_desc: &TextureViewDescriptor,
     ) -> Self {
         Self {
-            view: Arc::new(view),
-            id: TextureViewId::new(),
-            size: texture_desc.size,
-            mip_level_count: texture_desc.mip_level_count,
-            sample_count: texture_desc.sample_count,
-            dimension: texture_desc.dimension,
-            format: texture_desc.format,
-            usage: texture_desc.usage,
-            aspect: view_desc.aspect,
-            base_mip_level: view_desc.base_mip_level,
-            base_array_layer: view_desc.base_array_layer,
+            inner: Arc::new(SharedTextureViewInner {
+                view,
+                id: TextureViewId::new(),
+
+                size: texture_desc.size,
+                mip_level_count: texture_desc.mip_level_count,
+                sample_count: texture_desc.sample_count,
+                dimension: texture_desc.dimension,
+                format: texture_desc.format,
+                usage: texture_desc.usage,
+                aspect: view_desc.aspect,
+                base_mip_level: view_desc.base_mip_level,
+                base_array_layer: view_desc.base_array_layer,
+            }),
         }
     }
 
+    #[inline]
     pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
+        &self.inner.view
     }
 
+    #[inline]
     pub fn id(&self) -> TextureViewId {
-        self.id
+        self.inner.id
     }
 
+    #[inline]
     pub fn size(&self) -> Extent3d {
-        self.size
+        self.inner.size
     }
 
+    #[inline]
     pub fn mip_level_count(&self) -> u32 {
-        self.mip_level_count
+        self.inner.mip_level_count
     }
 
+    #[inline]
     pub fn sample_count(&self) -> u32 {
-        self.sample_count
+        self.inner.sample_count
     }
 
+    #[inline]
     pub fn dimension(&self) -> TextureDimension {
-        self.dimension
+        self.inner.dimension
     }
 
+    #[inline]
     pub fn format(&self) -> TextureFormat {
-        self.format
+        self.inner.format
     }
 
+    #[inline]
     pub fn usage(&self) -> TextureUsages {
-        self.usage
+        self.inner.usage
     }
 
+    #[inline]
     pub fn aspect(&self) -> TextureAspect {
-        self.aspect
+        self.inner.aspect
     }
 
+    #[inline]
     pub fn base_mip_level(&self) -> u32 {
-        self.base_mip_level
+        self.inner.base_mip_level
     }
 
+    #[inline]
     pub fn base_array_layer(&self) -> u32 {
-        self.base_array_layer
+        self.inner.base_array_layer
     }
 }
 
 impl Deref for SharedTextureView {
     type Target = wgpu::TextureView;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         self.view()
     }
 }
 
 impl PartialEq for SharedTextureView {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
@@ -205,6 +249,12 @@ impl Eq for SharedTextureView {}
 impl TextureBinding for SharedTextureView {
     type State = ();
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.id())
+    }
+
+    #[inline]
     fn binding(
         &self,
         _device: &Device,
@@ -218,6 +268,12 @@ impl TextureBinding for SharedTextureView {
 impl TextureBinding for &SharedTextureView {
     type State = ();
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.id())
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -231,6 +287,12 @@ impl TextureBinding for &SharedTextureView {
 impl StorageTextureBinding for SharedTextureView {
     type State = ();
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.id())
+    }
+
+    #[inline]
     fn binding(
         &self,
         _device: &Device,
@@ -244,6 +306,12 @@ impl StorageTextureBinding for SharedTextureView {
 impl StorageTextureBinding for &SharedTextureView {
     type State = ();
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.id())
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -257,6 +325,12 @@ impl StorageTextureBinding for &SharedTextureView {
 impl SamplerBinding for SharedTextureView {
     type State = OnceCell<SharedSampler>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.id())
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -279,6 +353,12 @@ impl SamplerBinding for SharedTextureView {
 impl SamplerBinding for &SharedTextureView {
     type State = OnceCell<SharedSampler>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.id())
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,

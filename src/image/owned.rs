@@ -1,21 +1,20 @@
 use std::num::NonZeroU32;
 
-use wgpu::{
-    Extent3d, FilterMode, SamplerDescriptor, TextureDimension, TextureFormat, TextureUsages,
-};
+use wgpu::{Extent3d, SamplerDescriptor, TextureDimension, TextureFormat, TextureUsages};
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
+    bind_key::BindKey,
     Device, Queue, SharedDevice, SharedSampler, SharedTexture, SharedTextureView,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ImageData {
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
     pub format: TextureFormat,
-    pub filter: bool,
+    pub sampler: SamplerDescriptor<'static>,
 }
 
 impl Default for ImageData {
@@ -25,7 +24,7 @@ impl Default for ImageData {
             height: 0,
             data: Vec::new(),
             format: TextureFormat::Rgba8UnormSrgb,
-            filter: true,
+            sampler: SamplerDescriptor::default(),
         }
     }
 }
@@ -41,7 +40,7 @@ impl ImageData {
             height,
             data,
             format,
-            filter: true,
+            ..Default::default()
         }
     }
 
@@ -51,6 +50,26 @@ impl ImageData {
         let height = image.height();
         let data = image.into_rgba8().into_raw();
         Ok(Self::new(width, height, data))
+    }
+
+    pub fn open_hdr(path: &str) -> Result<Self, image::ImageError> {
+        let image = image::open(path)?;
+        let width = image.width();
+        let height = image.height();
+        let data = image
+            .into_rgba16()
+            .into_raw()
+            .into_iter()
+            .map(bytemuck::cast::<_, [u8; 2]>)
+            .flatten()
+            .collect();
+
+        Ok(Self::with_format(
+            width,
+            height,
+            data,
+            TextureFormat::Rgba16Uint,
+        ))
     }
 
     pub fn size(&self) -> Extent3d {
@@ -109,23 +128,19 @@ impl ImageData {
     }
 
     pub fn create_sampler(&self, device: &Device) -> SharedSampler {
-        let filter_mode = if self.filter {
-            FilterMode::Linear
-        } else {
-            FilterMode::Nearest
-        };
-
-        device.create_shared_sampler(&SamplerDescriptor {
-            mag_filter: filter_mode,
-            min_filter: filter_mode,
-            ..Default::default()
-        })
+        device.create_shared_sampler(&self.sampler)
     }
 }
 
 impl TextureBinding for ImageData {
     type State = Option<SharedTextureView>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.data)
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -155,6 +170,12 @@ impl TextureBinding for ImageData {
 impl SamplerBinding for ImageData {
     type State = Option<SharedSampler>;
 
+    #[inline]
+    fn bind_key(&self) -> BindKey {
+        BindKey::from_hash(&self.data)
+    }
+
+    #[inline]
     fn binding(
         &self,
         device: &Device,
@@ -162,10 +183,6 @@ impl SamplerBinding for ImageData {
         state: &mut Self::State,
     ) -> SharedBindingResource {
         if let Some(sampler) = state {
-            if sampler.mag_filter() == FilterMode::Nearest && self.filter {
-                *sampler = self.create_sampler(device);
-            }
-
             SharedBindingResource::Sampler(sampler.clone())
         } else {
             let sampler = self.create_sampler(device);

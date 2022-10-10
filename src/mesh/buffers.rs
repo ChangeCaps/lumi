@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use wgpu::{util::BufferInitDescriptor, BufferUsages, Device};
 
-use crate::{id::MeshId, SharedBuffer, SharedDevice};
+use crate::{util::HashMap, SharedBuffer, SharedDevice};
 
 use super::Mesh;
 
@@ -14,7 +12,7 @@ pub struct MeshBuffers {
 
 impl MeshBuffers {
     pub fn new(device: &Device, mesh: &Mesh) -> Self {
-        let mut attributes = HashMap::new();
+        let mut attributes = HashMap::default();
         for (name, attribute) in &mesh.attributes {
             let buffer = device.create_shared_buffer_init(&BufferInitDescriptor {
                 label: Some(&format!("{} attribute buffer", name)),
@@ -36,31 +34,5 @@ impl MeshBuffers {
             attributes,
             index_buffer,
         }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct MeshBufferCache {
-    buffers: HashMap<MeshId, MeshBuffers>,
-}
-
-impl MeshBufferCache {
-    pub fn contains(&self, mesh: &Mesh) -> bool {
-        self.buffers.contains_key(&mesh.id())
-    }
-
-    pub fn prepare(&mut self, device: &Device, mesh: &Mesh) {
-        if !self.buffers.contains_key(&mesh.id()) {
-            self.buffers
-                .insert(mesh.id(), MeshBuffers::new(device, mesh));
-        }
-    }
-
-    pub fn insert(&mut self, mesh: &Mesh, buffers: MeshBuffers) {
-        self.buffers.insert(mesh.id(), buffers);
-    }
-
-    pub fn get(&self, mesh: &Mesh) -> Option<&MeshBuffers> {
-        self.buffers.get(&mesh.id())
     }
 }

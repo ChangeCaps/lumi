@@ -1,3 +1,4 @@
+use encase::ShaderType;
 use glam::{Vec3, Vec4};
 
 use crate::{
@@ -8,6 +9,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Bind)]
+#[uniform(RawStandardMaterial = "standard_material")]
 pub struct StandardMaterial {
     #[texture]
     #[sampler(name = "base_color_sampler")]
@@ -24,35 +26,20 @@ pub struct StandardMaterial {
     #[texture]
     #[sampler(name = "emissive_map_sampler")]
     pub emissive_map: Option<Image>,
-    #[uniform]
     pub thickness: f32,
-    #[uniform]
     pub subsurface_power: f32,
-    #[uniform]
     pub subsurface_color: Vec3,
-    #[uniform]
     pub base_color: Vec4,
-    #[uniform]
     pub alpha_cutoff: f32,
-    #[uniform]
     pub metallic: f32,
-    #[uniform]
     pub roughness: f32,
-    #[uniform]
     pub clearcoat: f32,
-    #[uniform]
     pub clearcoat_roughness: f32,
-    #[uniform]
     pub reflectance: f32,
-    #[uniform]
     pub emissive: Vec3,
-    #[uniform]
     pub emissive_exposure_compensation: f32,
-    #[uniform]
     pub transmission: f32,
-    #[uniform]
     pub ior: f32,
-    #[uniform]
     pub absorption: Vec3,
 }
 
@@ -83,8 +70,57 @@ impl Default for StandardMaterial {
     }
 }
 
+#[derive(Clone, Copy, ShaderType)]
+pub struct RawStandardMaterial {
+    pub thickness: f32,
+    pub subsurface_power: f32,
+    pub subsurface_color: Vec3,
+    pub base_color: Vec4,
+    pub alpha_cutoff: f32,
+    pub metallic: f32,
+    pub roughness: f32,
+    pub clearcoat: f32,
+    pub clearcoat_roughness: f32,
+    pub reflectance: f32,
+    pub emissive: Vec3,
+    pub emissive_exposure_compensation: f32,
+    pub transmission: f32,
+    pub ior: f32,
+    pub absorption: Vec3,
+}
+
+impl From<&StandardMaterial> for RawStandardMaterial {
+    fn from(material: &StandardMaterial) -> Self {
+        Self {
+            thickness: material.thickness,
+            subsurface_power: material.subsurface_power,
+            subsurface_color: material.subsurface_color,
+            base_color: material.base_color,
+            alpha_cutoff: material.alpha_cutoff,
+            metallic: material.metallic,
+            roughness: material.roughness,
+            clearcoat: material.clearcoat,
+            clearcoat_roughness: material.clearcoat_roughness,
+            reflectance: material.reflectance,
+            emissive: material.emissive,
+            emissive_exposure_compensation: material.emissive_exposure_compensation,
+            transmission: material.transmission,
+            ior: material.ior,
+            absorption: material.absorption,
+        }
+    }
+}
+
 impl Material for StandardMaterial {
     fn fragment_shader() -> ShaderRef {
         ShaderRef::module("lumi/standard_frag.wgsl")
+    }
+
+    fn is_translucent(&self) -> bool {
+        self.base_color.w < 1.0 || self.transmission > 0.0
+    }
+
+    fn use_ssr(&self) -> bool {
+        self.transmission > 0.0
     }
 }

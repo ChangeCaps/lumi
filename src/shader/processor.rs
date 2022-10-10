@@ -1,9 +1,12 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     path::{Path, PathBuf},
 };
 
-use crate::shader::{DefaultShader, ShaderError, ShaderRef};
+use crate::{
+    shader::{DefaultShader, ShaderError, ShaderRef},
+    util::{HashMap, HashSet},
+};
 
 use super::{FsShaderIo, Shader, ShaderIo};
 
@@ -66,7 +69,7 @@ impl CachedShader {
     fn parse(parent_path: Option<&Path>, mut source: &str) -> Result<Self, ShaderError> {
         let mut stripped_source = String::new();
 
-        let mut includes = HashSet::new();
+        let mut includes = HashSet::default();
 
         while let Some(i) = source.find(INCLUDE_DIRECTIVE) {
             // skip multi-line comment
@@ -137,8 +140,8 @@ impl Default for ShaderProcessor {
 impl ShaderProcessor {
     pub fn empty(io: impl ShaderIo + 'static) -> Self {
         Self {
-            modules: HashMap::new(),
-            cache: HashMap::new(),
+            modules: HashMap::default(),
+            cache: HashMap::default(),
             io: Box::new(io),
         }
     }
@@ -176,9 +179,17 @@ impl ShaderProcessor {
         add_module!("pbr_types.wgsl", "wgsl/pbr_types.wgsl");
         add_module!("pbr_pixel.wgsl", "wgsl/pbr_pixel.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
+        add_module!("ssr.wgsl", "wgsl/ssr.wgsl");
         add_module!("environment.wgsl", "wgsl/environment.wgsl");
         add_module!("pbr_light.wgsl", "wgsl/pbr_light.wgsl");
+        add_module!("sky.wgsl", "wgsl/sky.wgsl");
+        add_module!("poisson.wgsl", "wgsl/poisson.wgsl");
+        add_module!("shadow.wgsl", "wgsl/shadow.wgsl");
+        add_module!("shadow_mesh.wgsl", "wgsl/shadow_mesh.wgsl");
 
+        add_module!("gaussian.wgsl", "wgsl/gaussian.wgsl");
+        add_module!("unlit.wgsl", "wgsl/unlit.wgsl");
+        add_module!("sky_vert.wgsl", "wgsl/sky_vert.wgsl");
         add_module!("fullscreen_vert.wgsl", "wgsl/fullscreen_vert.wgsl");
         add_module!("bloom_frag.wgsl", "wgsl/bloom_frag.wgsl");
         add_module!("tonemapping_frag.wgsl", "wgsl/tonemapping_frag.wgsl");
@@ -197,6 +208,12 @@ impl ShaderProcessor {
                 }
                 DefaultShader::Fragment => {
                     Ok(include_str!("../../shaders/wgsl/default_frag.wgsl").to_string())
+                }
+                DefaultShader::ShadowVertex => {
+                    Ok(include_str!("../../shaders/wgsl/default_shadow_vert.wgsl").to_string())
+                }
+                DefaultShader::ShadowFragment => {
+                    unimplemented!()
                 }
                 DefaultShader::Sky => {
                     Ok(include_str!("../../shaders/wgsl/default_sky.wgsl").to_string())
@@ -235,7 +252,7 @@ impl ShaderProcessor {
 
         let mut stack: VecDeque<_> = vec![shader_ref].into();
         let mut included = Vec::new();
-        let mut visited = HashSet::new();
+        let mut visited = HashSet::default();
 
         while let Some(shader_ref) = stack.pop_front() {
             if included.contains(&shader_ref) {

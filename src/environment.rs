@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use lumi_bake::{BakedEnvironment, EnvironmentData};
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, Device,
@@ -15,6 +13,7 @@ use crate::{
     id::{CameraId, EnvironmentId},
     prelude::{ImageData, RenderTarget, ShaderRef, World},
     shader::{DefaultShader, ShaderProcessor},
+    util::HashMap,
     SharedDevice, SharedTexture, SharedTextureView,
 };
 
@@ -56,6 +55,9 @@ impl Environment {
                 &image.data,
                 image.width,
                 image.height,
+                256,
+                128,
+                2048,
             ),
         }
     }
@@ -66,9 +68,8 @@ impl Environment {
 }
 
 pub struct PreparedEnvironment {
-    diffuse_texture: SharedTexture,
+    sky_view: SharedTextureView,
     diffuse_view: SharedTextureView,
-    specular_texture: SharedTexture,
     specular_view: SharedTextureView,
     integrated_brdf: SharedTextureView,
     id: EnvironmentId,
@@ -127,10 +128,31 @@ impl PreparedEnvironment {
             ..Default::default()
         });
 
+        let sky_texture = SharedTexture::new(
+            baked_env.sky,
+            &TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: baked_env.sky_size,
+                    height: baked_env.sky_size,
+                    depth_or_array_layers: 6,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba16Float,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            },
+        );
+
+        let sky_view = sky_texture.create_view(&TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        });
+
         Self {
-            diffuse_texture,
+            sky_view,
             diffuse_view,
-            specular_texture,
             specular_view,
             integrated_brdf,
             id: environemnt.id(),
@@ -168,6 +190,9 @@ pub struct EnvironmentBindings<'a> {
 pub struct SkyBindings {
     #[uniform]
     pub camera: RawCamera,
+    #[texture(dimension = cube)]
+    #[sampler(name = "sky_sampler")]
+    pub sky_texture: SharedTextureView,
 }
 
 pub struct Sky {
@@ -229,19 +254,18 @@ impl Sky {
         sample_count: u32,
     ) -> Self {
         let mut vertex = shader_processor
-            .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
+            .process(ShaderRef::module("lumi/sky_vert.wgsl"))
             .unwrap();
         let mut fragment = shader_processor
             .process(ShaderRef::Default(DefaultShader::Sky))
             .unwrap();
-        vertex.rebind(&mut fragment).unwrap();
+        vertex.rebind_with(&mut fragment).unwrap();
         vertex.compile(device).unwrap();
         fragment.compile(device).unwrap();
 
         let bindings_layout = BindingsLayout::new()
             .with_shader(&vertex)
             .with_shader(&fragment)
-            .bind::<EnvironmentBindings>()
             .bind::<SkyBindings>();
 
         let bind_group_layouts = bindings_layout.create_bind_group_layouts(device);
@@ -280,7 +304,7 @@ impl Sky {
             vertex,
             fragment,
             bindings_layout,
-            bindings: HashMap::new(),
+            bindings: HashMap::default(),
             pipeline_layout,
             pipeline,
             sample_count,
@@ -321,9 +345,9 @@ impl Sky {
                 queue,
                 &SkyBindings {
                     camera: camera.raw_with_aspect(aspect),
+                    sky_texture: environment.sky_view.clone(),
                 },
             );
-            bindings.bind(device, queue, &environment.bindings());
 
             bindings.update_bind_groups(device);
         }

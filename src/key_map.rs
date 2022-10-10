@@ -5,7 +5,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-pub trait Key: Any + Debug {
+pub trait Key: Send + Sync + Any + Debug {
     fn hash(&self, hasher: &mut dyn Hasher);
     fn eq(&self, other: &dyn Key) -> bool;
     fn box_clone(&self) -> Box<dyn Key>;
@@ -13,12 +13,14 @@ pub trait Key: Any + Debug {
 
 impl<T> Key for T
 where
-    T: Clone + Debug + Any + Eq + Hash,
+    T: Clone + Debug + Send + Sync + Any + Eq + Hash,
 {
+    #[inline]
     fn hash(&self, mut hasher: &mut dyn Hasher) {
         self.hash(&mut hasher);
     }
 
+    #[inline]
     fn eq(&self, other: &dyn Key) -> bool {
         if self.type_id() != other.type_id() {
             return false;
@@ -30,12 +32,14 @@ where
         self.eq(other)
     }
 
+    #[inline]
     fn box_clone(&self) -> Box<dyn Key> {
         Box::new(self.clone())
     }
 }
 
 impl PartialEq for dyn Key {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.eq(other)
     }
@@ -61,6 +65,7 @@ pub struct KeyMap<T> {
 }
 
 impl<T> Default for KeyMap<T> {
+    #[inline]
     fn default() -> Self {
         Self {
             map: HashMap::default(),
@@ -69,35 +74,70 @@ impl<T> Default for KeyMap<T> {
 }
 
 impl<T> KeyMap<T> {
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[inline]
     pub fn contains(&self, key: &dyn Key) -> bool {
         self.map.contains_key(key)
     }
 
+    #[inline]
     pub fn insert<K: Key>(&mut self, key: K, value: T) -> Option<T> {
         self.map.insert(Box::new(key), value)
     }
 
+    #[inline]
     pub fn insert_boxed(&mut self, key: Box<dyn Key>, value: T) -> Option<T> {
         self.map.insert(key, value)
     }
 
+    #[inline]
     pub fn remove(&mut self, key: &dyn Key) -> Option<T> {
         self.map.remove(key)
     }
 
+    #[inline]
     pub fn entry<K: Key>(&mut self, key: K) -> Entry<'_, Box<dyn Key>, T> {
         self.map.entry(Box::new(key))
     }
 
+    #[inline]
     pub fn get(&self, key: &dyn Key) -> Option<&T> {
         self.map.get(key)
     }
 
+    #[inline]
     pub fn get_mut(&mut self, key: &dyn Key) -> Option<&mut T> {
         self.map.get_mut(key)
+    }
+
+    #[inline]
+    pub fn keys(&self) -> impl Iterator<Item = &dyn Key> {
+        self.map.keys().map(|key| key.as_ref())
+    }
+
+    #[inline]
+    pub fn values(&self) -> impl Iterator<Item = &T> {
+        self.map.values()
+    }
+
+    #[inline]
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.map.values_mut()
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (&dyn Key, &T)> {
+        self.map.iter().map(|(key, value)| (key.as_ref(), value))
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&dyn Key, &mut T)> {
+        self.map
+            .iter_mut()
+            .map(|(key, value)| (key.as_ref(), value))
     }
 }

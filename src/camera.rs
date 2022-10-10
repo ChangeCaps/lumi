@@ -2,14 +2,16 @@ use encase::ShaderType;
 use glam::{Mat4, Vec3};
 use wgpu::TextureView;
 
-use crate::{renderer::RenderTarget, SharedTextureView};
+use crate::{aabb::Frustum, renderer::RenderTarget, SharedTextureView};
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawCamera {
     pub position: Vec3,
     pub aspect_ratio: f32,
     pub view: Mat4,
+    pub inverse_view: Mat4,
     pub view_proj: Mat4,
+    pub inverse_view_proj: Mat4,
     pub ev100: f32,
     pub exposure: f32,
 }
@@ -131,6 +133,20 @@ impl Projection {
             Projection::Orthographic(orthographic) => orthographic.projection_with_aspect(aspect),
         }
     }
+
+    pub fn has_far_plane(&self) -> bool {
+        match self {
+            Projection::Perspective(_) => false,
+            Projection::Orthographic(_) => true,
+        }
+    }
+
+    pub fn far(&self) -> f32 {
+        match self {
+            Projection::Perspective(_) => f32::INFINITY,
+            Projection::Orthographic(orthographic) => orthographic.far,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -224,12 +240,36 @@ impl Camera {
         self
     }
 
+    pub fn has_far_plane(&self) -> bool {
+        self.projection.has_far_plane()
+    }
+
+    pub fn far(&self) -> f32 {
+        self.projection.far()
+    }
+
     pub fn view_proj(&self) -> Mat4 {
         self.projection.projection() * self.view.inverse()
     }
 
     pub fn view_proj_with_aspect(&self, aspect: f32) -> Mat4 {
         self.projection.projection_with_aspect(aspect) * self.view.inverse()
+    }
+
+    pub fn frustum(&self) -> Frustum {
+        Frustum::from_view_proj(
+            self.view,
+            self.projection.projection(),
+            self.projection.far(),
+        )
+    }
+
+    pub fn frustum_with_aspect(&self, aspect: f32) -> Frustum {
+        Frustum::from_view_proj(
+            self.view,
+            self.projection.projection_with_aspect(aspect),
+            self.projection.far(),
+        )
     }
 
     pub fn ev100(&self) -> f32 {
@@ -248,7 +288,9 @@ impl Camera {
             position: self.view.w_axis.truncate(),
             aspect_ratio: 1.0,
             view: self.view,
+            inverse_view: self.view.inverse(),
             view_proj: self.view_proj(),
+            inverse_view_proj: self.view_proj().inverse(),
             ev100: self.ev100(),
             exposure: self.exposure(),
         }
@@ -259,55 +301,11 @@ impl Camera {
             position: self.view.w_axis.truncate(),
             aspect_ratio: aspect,
             view: self.view,
+            inverse_view: self.view.inverse(),
             view_proj: self.view_proj_with_aspect(aspect),
+            inverse_view_proj: self.view_proj_with_aspect(aspect).inverse(),
             ev100: self.ev100(),
             exposure: self.exposure(),
-        }
-    }
-
-    pub fn info(&self, main: &RenderTarget) -> CameraInfo {
-        CameraInfo {
-            view: self.view,
-            projection: self.projection,
-            ev100: self.ev100(),
-            exposure: self.exposure(),
-            width: self.target.get_width(main.width),
-            height: self.target.get_height(main.height),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CameraInfo {
-    pub view: Mat4,
-    pub projection: Projection,
-    pub ev100: f32,
-    pub exposure: f32,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl CameraInfo {
-    pub fn aspect_ratio(&self) -> f32 {
-        self.width as f32 / self.height as f32
-    }
-
-    pub fn proj(&self) -> Mat4 {
-        self.projection.projection_with_aspect(self.aspect_ratio())
-    }
-
-    pub fn view_proj(&self) -> Mat4 {
-        self.proj() * self.view.inverse()
-    }
-
-    pub fn raw(&self) -> RawCamera {
-        RawCamera {
-            position: self.view.w_axis.truncate(),
-            aspect_ratio: self.aspect_ratio(),
-            view: self.view,
-            view_proj: self.view_proj(),
-            ev100: self.ev100,
-            exposure: self.exposure,
         }
     }
 }

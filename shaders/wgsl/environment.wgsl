@@ -2,14 +2,15 @@
 #include <lumi/pbr_types.wgsl>
 #include <lumi/pbr_pixel.wgsl>
 #include <lumi/camera.wgsl>
+#include <lumi/ssr.wgsl>
 
-@group(0) @binding(4)
+@group(0) @binding(0)
 var environment_diffuse: texture_cube<f32>;
 
-@group(0) @binding(5)
+@group(0) @binding(0)
 var environment_specular: texture_cube<f32>;
 
-@group(0) @binding(6)
+@group(0) @binding(0)
 var environment_sampler: sampler;
 
 fn env_diffuse(diffuse_color: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
@@ -96,9 +97,16 @@ fn env_refractions(
 		pixel.perceptual_roughness,
 		0.0,
 		saturate(pixel.eta_ir * 3.0 - 2.0),
-	);
+	);	
 
-	var ft = prefiltered_radiance(ray.direction, perceptual_roughness);
+	let p = camera.view_proj * vec4<f32>(ray.position, 1.0);
+	let p = p.xy * (vec2<f32>(0.5, -0.5) / p.w) + 0.5;
+
+	let inv_log2sqrt5 = 0.8614;
+	let levels = f32(textureNumLevels(ssr_texture) - 1);
+	let lod = perceptual_roughness * perceptual_roughness * levels;
+	var ft = textureSampleLevel(ssr_texture, ssr_sampler, p, lod).rgb;
+
 	ft *= pixel.diffuse_color;
 	ft *= 1.0 - e;
 	ft *= t;
@@ -141,8 +149,7 @@ fn environment(
 		let ft = env_refractions(pixel, geometry, e) * pixel.transmission;
 		diffuse *= (1.0 - pixel.transmission);
 		specular += ft;
-	}
-	
+	}	
 
 	return diffuse + specular;
 }

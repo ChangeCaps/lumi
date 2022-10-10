@@ -65,12 +65,12 @@ fn get_pbr_pixel(pbr: Pbr, geometry: PbrGeometry) -> PbrPixel {
 	let min_roughness = 0.089 * 0.089;
 	// roughness
 	pixel.roughness = clamp(pbr.roughness, min_roughness, 0.99);
-	pixel.perceptual_roughness = linear_to_perceptual_roughness(pbr.roughness);
+	pixel.perceptual_roughness = linear_to_perceptual_roughness(pixel.roughness);
 
 	// clearcoat
 	pixel.clearcoat = pbr.clearcoat;
 	pixel.clearcoat_roughness = clamp(pbr.clearcoat_roughness, min_roughness, 0.99);
-	pixel.clearcoat_perceptual_roughness = linear_to_perceptual_roughness(pbr.clearcoat_roughness);
+	pixel.clearcoat_perceptual_roughness = linear_to_perceptual_roughness(pixel.clearcoat_roughness);
 
 	pixel.f0 = compute_f0(pbr.base_color.rgb, pbr.metallic, pbr.reflectance);
 	pixel.f90 = compute_f90(pixel.f0);

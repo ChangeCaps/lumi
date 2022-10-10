@@ -4,18 +4,24 @@ use egui_wgpu_backend::ScreenDescriptor;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use futures_lite::future;
 
-use lumi::{prelude::*, *};
+use lumi::prelude::*;
+use wgpu::*;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
 
-pub fn framework(
-    mut world: World,
-    mut f: impl FnMut(Event<()>, &mut Renderer, &mut World, &egui::Context) + 'static,
-) -> ! {
-    env_logger::init();
+pub trait App: 'static {
+    fn init(world: &mut World, renderer: &mut Renderer) -> Self;
+    fn event(&mut self, world: &mut World, event: &Event<()>);
+    fn render(&mut self, world: &mut World, renderer: &mut Renderer, ctx: &egui::Context);
+}
+
+pub fn framework<T: App>() -> ! {
+    env_logger::builder()
+        .filter_module("lumi", log::LevelFilter::Trace)
+        .init();
 
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
@@ -31,7 +37,7 @@ pub fn framework(
     let (device, queue) = future::block_on(adapter.request_device(
         &DeviceDescriptor {
             limits: Limits {
-                max_uniform_buffers_per_shader_stage: 16,
+                max_uniform_buffers_per_shader_stage: 15,
                 ..Default::default()
             },
             ..Default::default()
@@ -50,7 +56,10 @@ pub fn framework(
     };
     let mut resized = true;
 
+    let mut world = World::new();
     let mut renderer = Renderer::new(&device, &queue);
+
+    let mut app = T::init(&mut world, &mut renderer);
 
     let mut platform = Platform::new(PlatformDescriptor {
         physical_width: window.inner_size().width,
@@ -103,7 +112,7 @@ pub fn framework(
             platform.update_time(start_time.elapsed().as_secs_f64());
             platform.begin_frame();
 
-            f(event, &mut renderer, &mut world, &platform.context());
+            app.render(&mut world, &mut renderer, &platform.context());
 
             let target = surface.get_current_texture().unwrap();
             let target_view = target.texture.create_view(&Default::default());
@@ -145,6 +154,8 @@ pub fn framework(
             target.present();
 
             egui_render_pass.remove_textures(tdelta).unwrap();
+        } else {
+            app.event(&mut world, &event);
         }
     });
 }

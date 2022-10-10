@@ -1,7 +1,7 @@
 use std::{
     any::TypeId,
     hash::{Hash, Hasher},
-    ops::BitXor,
+    ops::{BitXor, BitXorAssign},
 };
 
 #[repr(transparent)]
@@ -11,6 +11,8 @@ pub struct BindKey {
 }
 
 impl BindKey {
+    pub const ZERO: Self = Self::new(0);
+
     pub const fn new(value: u64) -> Self {
         Self { value }
     }
@@ -37,5 +39,11 @@ impl BitXor for BindKey {
         Self {
             value: self.value ^ rhs.value,
         }
+    }
+}
+
+impl BitXorAssign for BindKey {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        self.value ^= rhs.value;
     }
 }

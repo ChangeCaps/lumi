@@ -1,44 +1,23 @@
-@group(1) @binding(0)
-var<uniform> thickness: f32;
+struct StandardMaterial {
+	thickness: f32,
+	subsurface_power: f32,
+	subsurface_color: vec3<f32>,
+	base_color: vec4<f32>,
+	alpha_cutoff: f32,
+	metallic: f32,
+	roughness: f32,
+	clearcoat: f32,
+	clearcoat_roughness: f32,
+	reflectance: f32,
+	emissive: vec3<f32>,
+	emissive_exposure_compensation: f32,
+	transmission: f32,
+	ior: f32,
+	absorption: vec3<f32>,
+}
 
 @group(1) @binding(0)
-var<uniform> subsurface_power: f32;
-
-@group(1) @binding(0)
-var<uniform> subsurface_color: vec3<f32>;
-
-@group(1) @binding(0)
-var<uniform> base_color: vec4<f32>;
-
-@group(1) @binding(0)
-var<uniform> alpha_cutoff: f32;
-
-@group(1) @binding(0)
-var<uniform> metallic: f32;
-
-@group(1) @binding(0)
-var<uniform> roughness: f32;
-
-@group(1) @binding(0)
-var<uniform> reflectance: f32;
-
-@group(1) @binding(0)
-var<uniform> clearcoat: f32;
-
-@group(1) @binding(0)
-var<uniform> clearcoat_roughness: f32;
-
-@group(1) @binding(0)
-var<uniform> emissive: vec3<f32>;
-
-@group(1) @binding(0)
-var<uniform> transmission: f32;
-
-@group(1) @binding(0)
-var<uniform> ior: f32;
-
-@group(1) @binding(0)
-var<uniform> absorption: vec3<f32>;
+var<uniform> standard_material: StandardMaterial;
 
 @group(1) @binding(0)
 var base_color_texture: texture_2d<f32>;

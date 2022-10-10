@@ -9,10 +9,12 @@ use wgpu::util::DeviceExt;
 
 pub struct EnvironmentData {
     pub irradiance_size: u32,
-    pub irradiance_data: Vec<u8>,
     pub indirect_size: u32,
     pub indirect_mip_levels: u32,
+    pub sky_size: u32,
+    pub irradiance_data: Vec<u8>,
     pub indirect_data: Vec<u8>,
+    pub sky_data: Vec<u8>,
 }
 
 impl EnvironmentData {
@@ -28,25 +30,32 @@ impl EnvironmentData {
         }
 
         let irradiance_size = read!(source, u32);
+        let indirect_size = read!(source, u32);
+        let indirect_mip_levels = read!(source, u32);
+        let sky_size = read!(source, u32);
+
         let irradiance_data_size =
             BakedEnvironment::texture_size(irradiance_size, irradiance_size, 1) * 6;
         let mut irradiance_data = vec![0u8; irradiance_data_size];
         source.read_exact(&mut irradiance_data)?;
 
-        let indirect_size = read!(source, u32);
-        let indirect_mip_levels = read!(source, u32);
         let indirect_data_size =
             BakedEnvironment::texture_size(indirect_size, indirect_size, indirect_mip_levels) * 6;
-
         let mut indirect_data = vec![0u8; indirect_data_size];
         source.read_exact(&mut indirect_data)?;
 
+        let sky_data_size = BakedEnvironment::texture_size(sky_size, sky_size, 1) * 6;
+        let mut sky_data = vec![0u8; sky_data_size];
+        source.read_exact(&mut sky_data)?;
+
         Ok(Self {
             irradiance_size,
-            irradiance_data,
             indirect_size,
             indirect_mip_levels,
+            sky_size,
+            irradiance_data,
             indirect_data,
+            sky_data,
         })
     }
 
@@ -63,11 +72,13 @@ impl EnvironmentData {
         }
 
         write!(dest, self.irradiance_size);
-        dest.write_all(&self.irradiance_data)?;
-
         write!(dest, self.indirect_size);
         write!(dest, self.indirect_mip_levels);
+        write!(dest, self.sky_size);
+
+        dest.write_all(&self.irradiance_data)?;
         dest.write_all(&self.indirect_data)?;
+        dest.write_all(&self.sky_data)?;
 
         Ok(())
     }
@@ -81,12 +92,15 @@ impl EnvironmentData {
 
 pub struct BakedEnvironment {
     pub irradiance_size: u32,
-    pub irradiance: wgpu::Texture,
-    pub irradiance_view: wgpu::TextureView,
     pub indirect_size: u32,
     pub indirect_mip_levels: u32,
+    pub sky_size: u32,
+    pub irradiance: wgpu::Texture,
+    pub irradiance_view: wgpu::TextureView,
     pub indirect: wgpu::Texture,
     pub indirect_view: wgpu::TextureView,
+    pub sky: wgpu::Texture,
+    pub sky_view: wgpu::TextureView,
 }
 
 fn align(x: u32) -> u32 {
@@ -139,6 +153,30 @@ impl BakedEnvironment {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             },
             &environment_data.indirect_data,
+        )
+    }
+
+    pub fn create_sky(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        environment_data: &EnvironmentData,
+    ) -> wgpu::Texture {
+        device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("Sky"),
+                size: wgpu::Extent3d {
+                    width: environment_data.sky_size,
+                    height: environment_data.sky_size,
+                    depth_or_array_layers: 6,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            },
+            &environment_data.sky_data,
         )
     }
 
@@ -248,6 +286,7 @@ impl BakedEnvironment {
     ) -> Self {
         let irradiance = Self::create_irradiance(device, queue, environment_data);
         let indirect = Self::create_indirect(device, queue, environment_data);
+        let sky = Self::create_sky(device, queue, environment_data);
 
         let irradiance_view = irradiance.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::Cube),
@@ -257,15 +296,22 @@ impl BakedEnvironment {
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..Default::default()
         });
+        let sky_view = sky.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        });
 
         Self {
             irradiance_size: environment_data.irradiance_size,
-            irradiance,
-            irradiance_view,
             indirect_size: environment_data.indirect_size,
             indirect_mip_levels: environment_data.indirect_mip_levels,
+            sky_size: environment_data.sky_size,
+            irradiance,
+            irradiance_view,
             indirect,
             indirect_view,
+            sky,
+            sky_view,
         }
     }
 
@@ -295,6 +341,8 @@ impl BakedEnvironment {
             self.indirect_size,
             self.indirect_mip_levels,
         );
+        let sky_data =
+            Self::read_texture(device, queue, &self.sky, self.sky_size, self.sky_size, 1);
 
         assert_eq!(
             irradiance_data.len(),
@@ -308,13 +356,19 @@ impl BakedEnvironment {
                 self.indirect_mip_levels
             ) * 6
         );
+        assert_eq!(
+            sky_data.len(),
+            Self::texture_size(self.sky_size, self.sky_size, 1) * 6
+        );
 
         EnvironmentData {
             irradiance_size: self.irradiance_size,
-            irradiance_data,
             indirect_size: self.indirect_size,
             indirect_mip_levels: self.indirect_mip_levels,
+            sky_size: self.sky_size,
+            irradiance_data,
             indirect_data,
+            sky_data,
         }
     }
 
@@ -368,6 +422,9 @@ impl BakedEnvironment {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         path: impl AsRef<Path>,
+        indirect_size: u32,
+        irradiance_size: u32,
+        sky_size: u32,
     ) -> image::ImageResult<Self> {
         let eq = image::open(path)?;
         let eq = eq.to_rgba16();
@@ -379,6 +436,9 @@ impl BakedEnvironment {
             bytes,
             eq.width(),
             eq.height(),
+            indirect_size,
+            irradiance_size,
+            sky_size,
         ))
     }
 
@@ -388,6 +448,9 @@ impl BakedEnvironment {
         bytes: &[u8],
         width: u32,
         height: u32,
+        indirect_size: u32,
+        irradiance_size: u32,
+        sky_size: u32,
     ) -> Self {
         let texture = device.create_texture_with_data(
             queue,
@@ -407,7 +470,14 @@ impl BakedEnvironment {
             &bytes,
         );
 
-        Self::from_eq(device, queue, &texture, 384, 128)
+        Self::from_eq(
+            device,
+            queue,
+            &texture,
+            indirect_size,
+            irradiance_size,
+            sky_size,
+        )
     }
 
     pub fn from_eq(
@@ -416,8 +486,27 @@ impl BakedEnvironment {
         texture: &wgpu::Texture,
         indirect_size: u32,
         irradiance_size: u32,
+        sky_size: u32,
     ) -> Self {
         let environemnt_view = texture.create_view(&Default::default());
+
+        let irradiance_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Environment Diffuse Texture"),
+            size: wgpu::Extent3d {
+                width: irradiance_size,
+                height: irradiance_size,
+                depth_or_array_layers: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
+        });
+        let irradiance_view = irradiance_texture.create_view(&Default::default());
 
         let indirect_mips = 30 - indirect_size.leading_zeros();
         let indirect_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -437,11 +526,11 @@ impl BakedEnvironment {
                 | wgpu::TextureUsages::COPY_SRC,
         });
 
-        let irradiance_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Environment Diffuse Texture"),
+        let sky_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
             size: wgpu::Extent3d {
-                width: irradiance_size,
-                height: irradiance_size,
+                width: sky_size,
+                height: sky_size,
                 depth_or_array_layers: 6,
             },
             mip_level_count: 1,
@@ -453,7 +542,7 @@ impl BakedEnvironment {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC,
         });
-        let irradiance_view = irradiance_texture.create_view(&Default::default());
+        let sky_view = sky_texture.create_view(&Default::default());
 
         let indirect_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -539,11 +628,31 @@ impl BakedEnvironment {
                 ],
             });
 
-        let indirect_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let sky_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&indirect_bind_group_layout],
-                push_constant_ranges: &[],
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Uint,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
         let irradiance_pipeline_layout =
@@ -553,6 +662,27 @@ impl BakedEnvironment {
                 push_constant_ranges: &[],
             });
 
+        let indirect_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&indirect_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        let sky_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&sky_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let irradiance_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Environment Irradiance Pipeline"),
+                layout: Some(&irradiance_pipeline_layout),
+                module: &device.create_shader_module(wgpu::include_wgsl!("environment.wgsl")),
+                entry_point: "irradiance",
+            });
+
         let indirect_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Environment Indirect Pipeline"),
             layout: Some(&indirect_pipeline_layout),
@@ -560,13 +690,43 @@ impl BakedEnvironment {
             entry_point: "indirect",
         });
 
-        let irradiance_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("Environment irradiance Pipeline"),
-                layout: Some(&irradiance_pipeline_layout),
-                module: &device.create_shader_module(wgpu::include_wgsl!("environment.wgsl")),
-                entry_point: "irradiance",
+        let sky_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Environment Sky Pipeline"),
+            layout: Some(&sky_pipeline_layout),
+            module: &device.create_shader_module(wgpu::include_wgsl!("environment.wgsl")),
+            entry_point: "eq_to_cube",
+        });
+
+        let mut irradiance_bind_groups = Vec::new();
+
+        for i in 0..6u32 {
+            let side_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: &i.to_le_bytes(),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
+
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &irradiance_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&environemnt_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&irradiance_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: side_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+
+            irradiance_bind_groups.push(bind_group);
+        }
 
         let mut indirect_bind_groups = Vec::new();
 
@@ -617,57 +777,20 @@ impl BakedEnvironment {
             }
         }
 
-        let mut irradiance_bind_groups = Vec::new();
-
-        for i in 0..6u32 {
-            let side_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: &i.to_le_bytes(),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &irradiance_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&environemnt_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&irradiance_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: side_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-
-            irradiance_bind_groups.push(bind_group);
-        }
-
-        /* ---------- indirect ---------- */
-
-        for (i, bind_group) in indirect_bind_groups.iter().enumerate() {
-            let mut encoder = device.create_command_encoder(&Default::default());
-            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
-            compute_pass.set_pipeline(&indirect_pipeline);
-
-            compute_pass.set_bind_group(0, bind_group, &[]);
-            compute_pass.dispatch_workgroups(
-                indirect_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
-                indirect_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
-                1,
-            );
-
-            log::trace!("Baked indirect: {}/{}", i + 1, indirect_bind_groups.len());
-
-            drop(compute_pass);
-            queue.submit(std::iter::once(encoder.finish()));
-            device.poll(wgpu::Maintain::Wait);
-        }
+        let sky_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &sky_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&environemnt_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&sky_view),
+                },
+            ],
+        });
 
         /* ---------- irradiance ---------- */
 
@@ -694,6 +817,47 @@ impl BakedEnvironment {
             device.poll(wgpu::Maintain::Wait);
         }
 
+        /* ---------- indirect ---------- */
+
+        for (i, bind_group) in indirect_bind_groups.iter().enumerate() {
+            let mut encoder = device.create_command_encoder(&Default::default());
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+            compute_pass.set_pipeline(&indirect_pipeline);
+
+            compute_pass.set_bind_group(0, bind_group, &[]);
+            compute_pass.dispatch_workgroups(
+                indirect_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+                indirect_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+                1,
+            );
+
+            log::trace!("Baked indirect: {}/{}", i + 1, indirect_bind_groups.len());
+
+            drop(compute_pass);
+            queue.submit(std::iter::once(encoder.finish()));
+            device.poll(wgpu::Maintain::Wait);
+        }
+
+        /* ---------- sky ---------- */
+
+        let mut encoder = device.create_command_encoder(&Default::default());
+        let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+        compute_pass.set_pipeline(&sky_pipeline);
+
+        compute_pass.set_bind_group(0, &sky_bind_group, &[]);
+        compute_pass.dispatch_workgroups(
+            sky_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+            sky_size / Self::WORKGROUP_SIZE + Self::WORKGROUP_SIZE,
+            6,
+        );
+
+        drop(compute_pass);
+
+        queue.submit(std::iter::once(encoder.finish()));
+        device.poll(wgpu::Maintain::Wait);
+
+        log::trace!("Baked sky: {}/{}", 1, 1);
+
         let indirect_view = indirect_texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..Default::default()
@@ -702,15 +866,22 @@ impl BakedEnvironment {
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..Default::default()
         });
+        let sky_view = sky_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        });
 
         Self {
             irradiance_size,
-            irradiance: irradiance_texture,
-            irradiance_view,
             indirect_size,
             indirect_mip_levels: indirect_mips,
+            sky_size,
+            irradiance: irradiance_texture,
+            irradiance_view,
             indirect: indirect_texture,
             indirect_view,
+            sky: sky_texture,
+            sky_view,
         }
     }
 }

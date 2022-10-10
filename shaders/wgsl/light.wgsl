@@ -13,6 +13,12 @@ struct DirectionalLight {
 	direction: vec3<f32>,
 	color: vec3<f32>,
 	intensity: f32,
+	size: f32,
+	depth: f32,
+	softness: f32,
+	falloff: f32,
+	cascade: u32,
+	view_proj: mat4x4<f32>,
 }
 
 struct Light {
