@@ -230,7 +230,7 @@ impl Default for AmbientLight {
     fn default() -> Self {
         Self {
             color: Vec3::ONE,
-            intensity: 35000.0,
+            intensity: 15000.0,
         }
     }
 }
