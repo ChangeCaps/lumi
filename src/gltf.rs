@@ -46,7 +46,7 @@ impl MeshNode {
                     let transform: Mat4 = Mat4::from_cols_array_2d(&node.transform().matrix());
                     let global_transform = global * transform;
 
-                    if transform != Mat4::IDENTITY {
+                    if global_transform != Mat4::IDENTITY {
                         for primitive in &mut primitives {
                             primitive.mesh.transform(global_transform);
                         }
