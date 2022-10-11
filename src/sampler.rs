@@ -1,4 +1,4 @@
-use std::{num::NonZeroU8, ops::Deref, sync::Arc};
+use std::{borrow::Cow, num::NonZeroU8, ops::Deref, sync::Arc};
 
 use wgpu::{AddressMode, CompareFunction, FilterMode, SamplerBorderColor, SamplerDescriptor};
 
@@ -14,6 +14,7 @@ struct SharedSamplerInner {
     sampler: wgpu::Sampler,
     id: SamplerId,
 
+    label: Option<Cow<'static, str>>,
     address_mode_u: AddressMode,
     address_mode_v: AddressMode,
     address_mode_w: AddressMode,
@@ -40,6 +41,7 @@ impl SharedSampler {
                 sampler,
                 id: SamplerId::new(),
 
+                label: desc.label.map(|label| Cow::Owned(label.to_owned())),
                 address_mode_u: desc.address_mode_u,
                 address_mode_v: desc.address_mode_v,
                 address_mode_w: desc.address_mode_w,
@@ -121,7 +123,25 @@ impl SharedSampler {
     }
 
     #[inline]
-    pub fn descriptor(&self) -> SamplerDescriptor<'static> {
+    pub fn descriptor<'a>(&'a self) -> SamplerDescriptor<'a> {
+        SamplerDescriptor {
+            label: self.inner.label.as_deref(),
+            address_mode_u: self.inner.address_mode_u,
+            address_mode_v: self.inner.address_mode_v,
+            address_mode_w: self.inner.address_mode_w,
+            mag_filter: self.inner.mag_filter,
+            min_filter: self.inner.min_filter,
+            mipmap_filter: self.inner.mipmap_filter,
+            lod_min_clamp: self.inner.lod_min_clamp,
+            lod_max_clamp: self.inner.lod_max_clamp,
+            compare: self.inner.compare,
+            anisotropy_clamp: self.inner.anisotropy_clamp,
+            border_color: self.inner.border_color,
+        }
+    }
+
+    #[inline]
+    pub fn static_descriptor(&self) -> SamplerDescriptor<'static> {
         SamplerDescriptor {
             label: None,
             address_mode_u: self.inner.address_mode_u,

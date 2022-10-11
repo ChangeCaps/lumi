@@ -193,6 +193,10 @@ impl SamplerBinding for ImageData {
         state: &mut Self::State,
     ) -> SharedBindingResource {
         if let Some(sampler) = state {
+            if sampler.descriptor() != self.sampler {
+                *sampler = device.create_shared_sampler(&self.sampler);
+            }
+
             SharedBindingResource::Sampler(sampler.clone())
         } else {
             let sampler = self.create_sampler(device);
