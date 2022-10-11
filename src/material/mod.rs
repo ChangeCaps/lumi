@@ -1,3 +1,6 @@
+mod standard;
+mod unlit;
+
 use std::{any::TypeId, borrow::Cow};
 
 use glam::{Mat4, Vec3};
@@ -12,28 +15,27 @@ use wgpu::{
 
 use crate::{
     aabb::{Aabb, RenderFrustum},
-    bloom::{BloomPipeline, MipChain},
-    mesh::PrepareMeshFn,
-    renderer::{RenderSettings, RenderViewPhase, ViewPhaseContext},
-    shadow::{ShadowFunctions, ShadowReceiverBindings},
-    util::HashMap,
-    SharedTextureView,
-};
-use crate::{
     bind::Bind,
     binding::{Bindings, BindingsLayout},
+    bloom::{BloomPipeline, MipChain},
     camera::RawCamera,
     environment::{EnvironmentBindings, PreparedEnvironment},
     frame_buffer::FrameBuffer,
     id::{CameraId, NodeId},
     light::LightBindings,
-    mesh::{Mesh, MeshBuffers},
-    prelude::{StandardMaterial, World},
+    mesh::{Mesh, MeshBuffers, PrepareMeshFn},
+    prelude::World,
     renderable::Renderable,
+    renderer::{RenderSettings, RenderViewPhase, ViewPhaseContext},
     resources::Resources,
     shader::{DefaultShader, Shader, ShaderProcessor, ShaderRef},
-    SharedBindGroup, SharedBuffer, SharedDevice, SharedRenderPipeline,
+    shadow::{ShadowFunctions, ShadowReceiverBindings},
+    util::HashMap,
+    SharedBindGroup, SharedBuffer, SharedDevice, SharedRenderPipeline, SharedTextureView,
 };
+
+pub use standard::*;
+pub use unlit::*;
 
 #[derive(Clone, Debug)]
 pub struct MeshVertexLayout {

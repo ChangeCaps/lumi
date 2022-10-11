@@ -5,9 +5,8 @@ use wgpu::{FilterMode, TextureFormat};
 
 use crate::{
     image::{Image, ImageData},
-    material::Primitive,
+    material::{Primitive, StandardMaterial},
     mesh::Mesh,
-    pbr::StandardMaterial,
     prelude::{MeshNode, NormalMap},
 };
 

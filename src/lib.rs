@@ -21,7 +21,6 @@ pub mod key_map;
 pub mod light;
 pub mod material;
 pub mod mesh;
-pub mod pbr;
 pub mod render_pipeline;
 pub mod renderable;
 pub mod renderer;
@@ -31,7 +30,6 @@ pub mod shader;
 pub mod shadow;
 pub mod texture;
 pub mod tone_mapping;
-pub mod unlit;
 mod util;
 pub mod world;
 
@@ -64,9 +62,8 @@ pub mod prelude {
     pub use crate::id::{CameraId, LightId, NodeId};
     pub use crate::image::{Image, ImageData, NormalMap};
     pub use crate::light::{DirectionalLight, PointLight};
-    pub use crate::material::{Material, MeshNode};
+    pub use crate::material::{Material, MeshNode, StandardMaterial, UnlitMaterial};
     pub use crate::mesh::{shape, Mesh};
-    pub use crate::pbr::StandardMaterial;
     pub use crate::renderable::Renderable;
     pub use crate::renderer::{
         PhaseContext, PhaseLabel, RenderPhase, RenderTarget, RenderViewPhase, Renderer,
@@ -76,7 +73,6 @@ pub mod prelude {
     pub use crate::sampler::SharedSampler;
     pub use crate::shader::{Shader, ShaderRef};
     pub use crate::texture::{SharedTexture, SharedTextureView};
-    pub use crate::unlit::UnlitMaterial;
     pub use crate::world::{Node, World};
     pub use wgpu::{
         util::BufferInitDescriptor, AddressMode, BufferDescriptor, BufferUsages, Device, Extent3d,
