@@ -12,6 +12,7 @@ use wgpu::TextureFormat;
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
     bind_key::BindKey,
+    id::TextureId,
     Device, Queue, SharedSampler, SharedTexture, SharedTextureView,
 };
 
@@ -20,15 +21,16 @@ use super::ImageData;
 #[derive(Default)]
 struct ImageInner {
     image: ImageData,
-    view: OnceCell<SharedTexture>,
+    texture: OnceCell<SharedTexture>,
     write: AtomicBool,
 }
 
 impl Clone for ImageInner {
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             image: self.image.clone(),
-            view: OnceCell::new(),
+            texture: OnceCell::new(),
             write: AtomicBool::new(false),
         }
     }
@@ -40,16 +42,18 @@ pub struct Image {
 }
 
 impl Image {
+    #[inline]
     pub fn new(image: ImageData) -> Self {
         Self {
             inner: Arc::new(ImageInner {
                 image,
-                view: OnceCell::new(),
+                texture: OnceCell::new(),
                 write: AtomicBool::new(false),
             }),
         }
     }
 
+    #[inline]
     pub fn render_target(width: u32, height: u32) -> Self {
         Self::new(ImageData::with_format(
             width,
@@ -59,30 +63,64 @@ impl Image {
         ))
     }
 
+    #[inline]
     pub fn open_srgb(path: &str) -> Result<Self, image::ImageError> {
         let image = ImageData::open_srgb(path)?;
         Ok(Self::new(image))
     }
 
+    #[inline]
     pub fn open_hdr(path: &str) -> Result<Self, image::ImageError> {
         let image = ImageData::open_hdr(path)?;
         Ok(Self::new(image))
     }
 
+    #[inline]
+    fn inner_mut(&mut self) -> &mut ImageInner {
+        Arc::make_mut(&mut self.inner)
+    }
+
+    #[inline]
+    pub fn set_texture(&mut self, texture: SharedTexture) {
+        let inner = self.inner_mut();
+
+        if let Some(inner_texture) = inner.texture.get_mut() {
+            *inner_texture = texture;
+        } else {
+            inner
+                .texture
+                .set(texture)
+                .expect("texture already set, you should never see this");
+        }
+    }
+
+    #[inline]
+    pub fn texture_id(&self) -> Option<TextureId> {
+        self.get_texture().map(|texture| texture.id())
+    }
+
+    #[inline]
+    pub fn get_texture(&self) -> Option<&SharedTexture> {
+        self.inner.texture.get()
+    }
+
+    #[inline]
     pub fn data(&self) -> &ImageData {
         &self.inner.image
     }
 
+    #[inline]
     pub fn data_mut(&mut self) -> &mut ImageData {
         let inner = Arc::make_mut(&mut self.inner);
         *inner.write.get_mut() = true;
         &mut inner.image
     }
 
+    #[inline]
     pub fn texture_view(&self, device: &Device, queue: &Queue) -> SharedTextureView {
         let texture = self
             .inner
-            .view
+            .texture
             .get_or_init(|| self.inner.image.create_texture(device, queue));
 
         if self.inner.write.swap(false, Ordering::SeqCst) {
@@ -94,12 +132,14 @@ impl Image {
 }
 
 impl From<ImageData> for Image {
+    #[inline]
     fn from(image: ImageData) -> Self {
         Self::new(image)
     }
 }
 
 impl std::fmt::Debug for Image {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedImage")
             .field("image", &self.inner.image)
@@ -110,12 +150,14 @@ impl std::fmt::Debug for Image {
 impl Deref for Image {
     type Target = ImageData;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         self.data()
     }
 }
 
 impl DerefMut for Image {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data_mut()
     }

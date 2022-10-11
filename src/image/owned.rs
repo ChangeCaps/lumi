@@ -18,6 +18,7 @@ pub struct ImageData {
 }
 
 impl Default for ImageData {
+    #[inline]
     fn default() -> Self {
         Self {
             width: 0,
@@ -30,10 +31,12 @@ impl Default for ImageData {
 }
 
 impl ImageData {
+    #[inline]
     pub fn new(width: u32, height: u32, data: Vec<u8>) -> Self {
         Self::with_format(width, height, data, TextureFormat::Rgba8UnormSrgb)
     }
 
+    #[inline]
     pub fn with_format(width: u32, height: u32, data: Vec<u8>, format: TextureFormat) -> Self {
         Self {
             width,
@@ -44,6 +47,7 @@ impl ImageData {
         }
     }
 
+    #[inline]
     pub fn open_srgb(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = image::open(path)?;
         let width = image.width();
@@ -52,6 +56,7 @@ impl ImageData {
         Ok(Self::new(width, height, data))
     }
 
+    #[inline]
     pub fn open_hdr(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = image::open(path)?;
         let width = image.width();
@@ -72,6 +77,7 @@ impl ImageData {
         ))
     }
 
+    #[inline]
     pub fn size(&self) -> Extent3d {
         Extent3d {
             width: self.width,
@@ -80,6 +86,7 @@ impl ImageData {
         }
     }
 
+    #[inline]
     pub fn write_texture(&self, queue: &Queue, texture: &SharedTexture) {
         if self.data.is_empty() {
             return;
@@ -102,6 +109,7 @@ impl ImageData {
         );
     }
 
+    #[inline]
     pub fn create_texture(&self, device: &Device, queue: &Queue) -> SharedTexture {
         let desc = wgpu::TextureDescriptor {
             label: None,
@@ -122,11 +130,13 @@ impl ImageData {
         }
     }
 
+    #[inline]
     pub fn create_view(&self, device: &Device, queue: &Queue) -> SharedTextureView {
         self.create_texture(device, queue)
             .create_view(&Default::default())
     }
 
+    #[inline]
     pub fn create_sampler(&self, device: &Device) -> SharedSampler {
         device.create_shared_sampler(&self.sampler)
     }
