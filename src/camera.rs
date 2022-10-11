@@ -16,10 +16,14 @@ pub struct RawCamera {
     pub exposure: f32,
 }
 
+/// A right-handed infinite perspective projection.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Perspective {
+    /// The vertical field of view in radians.
     pub fov: f32,
+    /// The aspect ratio of the camera.
     pub aspect: f32,
+    /// The near plane of the camera.
     pub near: f32,
 }
 
@@ -47,6 +51,7 @@ impl Perspective {
     }
 }
 
+/// A right-handed orthographic projection.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Orthographic {
     pub left: f32,
@@ -149,10 +154,13 @@ impl Projection {
     }
 }
 
+/// Target for a [`Camera`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum CameraTarget {
+    /// Render to main target.
     #[default]
     Main,
+    /// Render to a texture.
     Texture(SharedTextureView),
 }
 
@@ -189,11 +197,17 @@ impl CameraTarget {
 pub struct Camera {
     pub view: Mat4,
     pub projection: Projection,
+    /// The cameras aperture in f-stops.
     pub aperture: f32,
+    /// The cameras shutter speed in seconds.
     pub shutter_speed: f32,
+    /// The cameras ISO.
     pub sensitivity: f32,
     pub exposure_compensation: f32,
     pub target: CameraTarget,
+    /// Priority for rendering this camera.
+    ///
+    /// Cameras with a higher priority will be rendered first.
     pub priority: u32,
     pub enabled: bool,
 }
