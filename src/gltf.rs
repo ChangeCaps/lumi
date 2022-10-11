@@ -12,7 +12,6 @@ use crate::{
 
 impl MeshNode {
     pub fn open_gltf(path: impl AsRef<Path>) -> gltf::Result<Self> {
-        println!("Loading glTF file: {}", path.as_ref().display());
         let (document, buffers, images) = gltf::import(path)?;
         Ok(Self::gltf_inner(document, buffers, images))
     }
