@@ -1,6 +1,6 @@
 use std::{num::NonZeroU8, ops::Deref, sync::Arc};
 
-use wgpu::{AddressMode, CompareFunction, FilterMode, SamplerBorderColor};
+use wgpu::{AddressMode, CompareFunction, FilterMode, SamplerBorderColor, SamplerDescriptor};
 
 use crate::{
     bind::{SamplerBinding, SharedBindingResource},
@@ -118,6 +118,24 @@ impl SharedSampler {
     #[inline]
     pub fn border_color(&self) -> Option<SamplerBorderColor> {
         self.inner.border_color
+    }
+
+    #[inline]
+    pub fn descriptor(&self) -> SamplerDescriptor<'static> {
+        SamplerDescriptor {
+            label: None,
+            address_mode_u: self.inner.address_mode_u,
+            address_mode_v: self.inner.address_mode_v,
+            address_mode_w: self.inner.address_mode_w,
+            mag_filter: self.inner.mag_filter,
+            min_filter: self.inner.min_filter,
+            mipmap_filter: self.inner.mipmap_filter,
+            lod_min_clamp: self.inner.lod_min_clamp,
+            lod_max_clamp: self.inner.lod_max_clamp,
+            compare: self.inner.compare,
+            anisotropy_clamp: self.inner.anisotropy_clamp,
+            border_color: self.inner.border_color,
+        }
     }
 }
 
