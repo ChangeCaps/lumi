@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::Path};
 
 use wgpu::{Extent3d, SamplerDescriptor, TextureDimension, TextureFormat, TextureUsages};
 
@@ -44,7 +44,7 @@ impl ImageData {
         }
     }
 
-    pub fn load_from_file(path: &str) -> Result<Self, image::ImageError> {
+    pub fn open_srgb(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = image::open(path)?;
         let width = image.width();
         let height = image.height();
@@ -52,7 +52,7 @@ impl ImageData {
         Ok(Self::new(width, height, data))
     }
 
-    pub fn open_hdr(path: &str) -> Result<Self, image::ImageError> {
+    pub fn open_hdr(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = image::open(path)?;
         let width = image.width();
         let height = image.height();

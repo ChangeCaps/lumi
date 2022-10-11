@@ -59,8 +59,8 @@ impl Image {
         ))
     }
 
-    pub fn load_from_file(path: &str) -> Result<Self, image::ImageError> {
-        let image = ImageData::load_from_file(path)?;
+    pub fn open_srgb(path: &str) -> Result<Self, image::ImageError> {
+        let image = ImageData::open_srgb(path)?;
         Ok(Self::new(image))
     }
 

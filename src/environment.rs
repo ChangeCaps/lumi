@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use lumi_bake::{BakedEnvironment, EnvironmentData};
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, Device,
@@ -44,6 +46,12 @@ impl Environment {
             kind: EnvironmentKind::RealTime(image),
             id: EnvironmentId::new(),
         }
+    }
+
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
+        let image = ImageData::open_hdr(path)?;
+
+        Ok(Self::new(image))
     }
 
     pub fn bake(&self, device: &Device, queue: &Queue) -> BakedEnvironment {

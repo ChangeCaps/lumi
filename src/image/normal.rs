@@ -25,8 +25,8 @@ impl NormalMap {
         Self(image)
     }
 
-    pub fn load_from_file(path: &str) -> Result<Self, image::ImageError> {
-        let image = Image::load_from_file(path)?;
+    pub fn open(path: &str) -> Result<Self, image::ImageError> {
+        let image = Image::open_srgb(path)?;
         Ok(image.into())
     }
 
