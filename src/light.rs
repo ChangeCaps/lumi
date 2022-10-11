@@ -101,7 +101,7 @@ pub struct DirectionalLight {
     pub color: Vec3,
     /// Intensity of the light in lux.
     pub illuminance: f32,
-    /// Size of the light in meters.
+    /// Size of the shadow projection in meters.
     pub size: f32,
     /// The depth of the light frustum in meters.
     pub depth: f32,
@@ -119,7 +119,7 @@ impl Default for DirectionalLight {
             color: Vec3::ONE,
             illuminance: 100_000.0,
             size: 200.0,
-            depth: 10_000.0,
+            depth: 1000.0,
             shadow_softness: 2.0,
             shadow_falloff: 2.0,
         }
@@ -155,9 +155,14 @@ impl DirectionalLight {
         translation * Mat4::look_at_rh(-self.direction, Vec3::ZERO, Vec3::Y)
     }
 
+    pub fn cascade_size(&self, cascade: u32) -> f32 {
+        let size = 2.0_f32.powi(cascade as i32);
+        let max = 2.0_f32.powi(4);
+        self.size * size / max
+    }
+
     pub fn proj(&self, cascade: u32) -> Mat4 {
-        let cascade = cascade as f32;
-        let size = f32::powf(2.0, cascade) * self.size;
+        let size = self.cascade_size(cascade);
 
         let min = -size / 2.0;
         let max = size / 2.0;

@@ -13,10 +13,6 @@ struct Shadow {
 	frag_coord: vec4<f32>,
 }
 
-fn z_clip_to_eye(z: f32, near: f32, far: f32) -> f32 {
-	return near - (far - near) * z;
-}
-
 fn penumbra_radius_uv(z_receiver: f32, z_blocker: f32) -> f32 {
 	return z_receiver - z_blocker;
 }
@@ -154,7 +150,7 @@ fn directional_pcss(
 	z_vs: f32,
 	trig: vec2<f32>,
 ) -> f32 {
-	let search_radius = light.softness / light.size * 0.5;
+	let search_radius = light.softness / light.size * 10.0;
 	let blocker = directional_find_blocker(
 		light_space,
 		index,
@@ -172,7 +168,7 @@ fn directional_pcss(
 
 	let avg_z = blocker.x * light.depth;
 
-	var penumbra = penumbra_radius_uv(z_vs, avg_z) * 0.005 * light.softness;
+	var penumbra = penumbra_radius_uv(z_vs, avg_z) * 0.005 * light.softness * 16.0;
 	penumbra = 1.0 - pow(1.0 - penumbra, light.falloff);
 	
 	var filter_radius = vec2<f32>(penumbra - 0.015 * light.softness) / light.size;
@@ -211,8 +207,8 @@ fn directional_shadow(light: DirectionalLight, shadow: Shadow, view_proj: mat4x4
 	let angle = noise * 2.0 * 3.14159265359;
 	let trig = vec2<f32>(cos(angle), sin(angle));
 
-	let bias_scale = 0.5;
-	let bias = light.size / 250000.0 * bias_scale;	
+	let bias_scale = 0.01;
+	let bias = 1.0 / light.depth * bias_scale;
 
 	return directional_pcss(light, light_space.xy, index, z, bias, plane_bias, z_vs, trig);
 }
