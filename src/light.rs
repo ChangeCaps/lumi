@@ -19,9 +19,13 @@ pub struct RawPointLight {
 
 #[derive(Clone, Copy, Debug)]
 pub struct PointLight {
+    /// The position of the light in world space.
     pub position: Vec3,
+    /// The color of the light.
     pub color: Vec3,
+    /// The intensity of the light in lumens.
     pub intensity: f32,
+    /// The range of the light in meters.
     pub range: f32,
 }
 
@@ -87,11 +91,23 @@ pub struct RawDirectionalLight {
 
 #[derive(Clone, Copy, Debug)]
 pub struct DirectionalLight {
+    /// Translation of the shadow map projection.
+    ///
+    /// This should usually be the position of the main camera.
     pub translation: Vec3,
+    /// Direction of the light.
     pub direction: Vec3,
+    /// Color of the light.
     pub color: Vec3,
+    /// Intensity of the light in lux.
     pub illuminance: f32,
+    /// Size of the light in meters.
+    pub size: f32,
+    /// The depth of the light frustum in meters.
+    pub depth: f32,
+    /// The softness of the shadows cast by this light.
     pub shadow_softness: f32,
+    /// The falloff of the shadows cast by this light.
     pub shadow_falloff: f32,
 }
 
@@ -102,6 +118,8 @@ impl Default for DirectionalLight {
             direction: Vec3::new(0.0, -1.0, 0.0),
             color: Vec3::ONE,
             illuminance: 100_000.0,
+            size: 200.0,
+            depth: 10_000.0,
             shadow_softness: 2.0,
             shadow_falloff: 2.0,
         }
@@ -132,10 +150,6 @@ impl AsLight for DirectionalLight {
 }
 
 impl DirectionalLight {
-    const NEAR: f32 = -500.0;
-    const FAR: f32 = 500.0;
-    const SIZE: f32 = 50.0;
-
     pub fn view(&self) -> Mat4 {
         let translation = Mat4::from_translation(self.translation);
         translation * Mat4::look_at_rh(-self.direction, Vec3::ZERO, Vec3::Y)
@@ -143,16 +157,22 @@ impl DirectionalLight {
 
     pub fn proj(&self, cascade: u32) -> Mat4 {
         let cascade = cascade as f32;
-        let size = f32::powf(2.0, cascade) * Self::SIZE / 2.0;
+        let size = f32::powf(2.0, cascade) * self.size;
 
-        Mat4::orthographic_rh(-size, size, -size, size, Self::NEAR, Self::FAR)
+        let min = -size / 2.0;
+        let max = size / 2.0;
+
+        let near = -self.depth / 2.0;
+        let far = self.depth / 2.0;
+
+        Mat4::orthographic_rh(min, max, min, max, near, far)
     }
 
     pub fn frustum(&self, cascade: u32) -> Frustum {
         let view = self.view();
         let proj = self.proj(cascade);
 
-        Frustum::from_view_proj(view.inverse(), proj, Self::FAR)
+        Frustum::from_view_proj(view.inverse(), proj, self.depth / 2.0)
     }
 
     pub fn render_frustum(&self, cascade: u32) -> RenderFrustum {
@@ -179,8 +199,8 @@ impl DirectionalLight {
             direction: self.direction.normalize(),
             color: self.color,
             intensity: self.illuminance,
-            size: Self::SIZE,
-            depth: Self::FAR - Self::NEAR,
+            size: self.size,
+            depth: self.depth,
             softness: self.shadow_softness,
             falloff: self.shadow_falloff,
             cascade,
