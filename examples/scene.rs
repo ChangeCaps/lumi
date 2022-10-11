@@ -25,7 +25,7 @@ impl App for Scene {
         let scene = MeshNode::open_gltf("examples/assets/scene.glb").unwrap();
         world.add(scene);
 
-        world.ambient_mut().intensity = 15_000.0;
+        *world.environment_mut() = Environment::open("env.hdr").unwrap();
 
         world.add_light(DirectionalLight {
             color: Vec3::new(1.0, 1.0, 1.0),
