@@ -87,10 +87,6 @@ fn directional_find_blocker(
 
 		let offset_light_space = light_space + offset;
 
-		if !valid_cascade(offset_light_space) {
-			continue;
-		}
-
 		let depth = sample_cascade(offset_light_space, index);
 		let bias = dot(offset, plane_bias);
 
@@ -125,10 +121,6 @@ fn directional_pcf_filter(
 
 		let offset_light_space = light_space + offset;
 
-		if !valid_cascade(offset_light_space) {
-			continue;
-		}
-
 		let depth = sample_cascade(offset_light_space, index);
 		let bias = dot(offset, plane_bias);
 
@@ -159,7 +151,7 @@ fn directional_pcss(
 		plane_bias,
 		search_radius,
 		trig,
-		16u,
+		12u,
 	);
 
 	if blocker.y < 1.0 {
@@ -182,7 +174,7 @@ fn directional_pcss(
 		plane_bias,
 		filter_radius,
 		trig,
-		48u,
+		24u,
 	);
 }
 
@@ -198,7 +190,11 @@ fn directional_shadow(light: DirectionalLight, shadow: Shadow, view_proj: mat4x4
 
 	if light_space.z < 0.0 || light_space.z > 1.0 {
 		return 1.0;
-	}	
+	}
+	
+	if !valid_cascade(light_space.xy) {
+		return 1.0;
+	}
 
 	let z = light_space.z;
 	let z_vs = z * light.depth;
