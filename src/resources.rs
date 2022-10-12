@@ -43,7 +43,7 @@ impl Resources {
 
     #[inline]
     pub fn get_keyed_mut<T: Resource>(&mut self) -> &mut KeyMap<T> {
-        self.get_mut_or_default()
+        self.get_or_default()
     }
 
     #[inline]
@@ -68,6 +68,11 @@ impl Resources {
         let resource = self.typed.remove(&TypeId::of::<T>())?;
 
         Some(unsafe { *Box::from_raw(Box::into_raw(resource) as *mut _) })
+    }
+
+    #[inline]
+    pub fn remove_or_default<T: Resource + Default>(&mut self) -> T {
+        self.remove().unwrap_or_default()
     }
 
     #[inline]
@@ -100,17 +105,7 @@ impl Resources {
     }
 
     #[inline]
-    pub fn get_or_default<T: Resource + Default>(&mut self) -> &T {
-        self.get_mut_or_default()
-    }
-
-    #[inline]
-    pub fn get_key_or_default<T: Resource + Default>(&mut self, key: &dyn Key) -> &T {
-        self.get_key_mut_or_default(key)
-    }
-
-    #[inline]
-    pub fn get_mut_or_insert_with<T: Resource>(&mut self, f: impl FnOnce() -> T) -> &mut T {
+    pub fn get_or_insert_with<T: Resource>(&mut self, f: impl FnOnce() -> T) -> &mut T {
         if !self.contains::<T>() {
             self.insert(f());
         }
@@ -119,12 +114,12 @@ impl Resources {
     }
 
     #[inline]
-    pub fn get_mut_or_default<T: Resource + Default>(&mut self) -> &mut T {
-        self.get_mut_or_insert_with(T::default)
+    pub fn get_or_default<T: Resource + Default>(&mut self) -> &mut T {
+        self.get_or_insert_with(T::default)
     }
 
     #[inline]
-    pub fn get_key_mut_or_insert_with<T: Resource>(
+    pub fn get_key_or_insert_with<T: Resource>(
         &mut self,
         key: &dyn Key,
         f: impl FnOnce() -> T,
@@ -137,8 +132,8 @@ impl Resources {
     }
 
     #[inline]
-    pub fn get_key_mut_or_default<T: Resource + Default>(&mut self, key: &dyn Key) -> &mut T {
-        self.get_key_mut_or_insert_with(key, T::default)
+    pub fn get_key_or_default<T: Resource + Default>(&mut self, key: &dyn Key) -> &mut T {
+        self.get_key_or_insert_with(key, T::default)
     }
 
     #[inline]

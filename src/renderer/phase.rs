@@ -31,7 +31,8 @@ impl PhaseLabel {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PhaseLabel)]
 pub enum DefaultPhases {
-    PrepareMesh,
+    PrepareMeshes,
+    PrepareLights,
     Shadow,
     Material,
 }

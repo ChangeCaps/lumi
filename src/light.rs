@@ -1,4 +1,3 @@
-use ahash::HashMap;
 use encase::ShaderType;
 use glam::{Mat4, Vec3};
 
@@ -6,7 +5,10 @@ use crate::{
     aabb::{Frustum, RenderFrustum},
     bind::Bind,
     buffer::StorageBuffer,
-    id::LightId,
+    prelude::World,
+    renderer::{PhaseContext, RenderPhase},
+    resources::Resources,
+    shadow::ShadowMaps,
 };
 
 #[derive(Clone, Copy, Debug, ShaderType)]
@@ -101,6 +103,8 @@ pub struct DirectionalLight {
     pub color: Vec3,
     /// Intensity of the light in lux.
     pub illuminance: f32,
+    /// Enables shadows.
+    pub shadows: bool,
     /// Size of the shadow projection in meters.
     pub size: f32,
     /// The depth of the light frustum in meters.
@@ -118,6 +122,7 @@ impl Default for DirectionalLight {
             direction: Vec3::new(0.0, -1.0, 0.0),
             color: Vec3::ONE,
             illuminance: 100_000.0,
+            shadows: true,
             size: 200.0,
             depth: 1000.0,
             shadow_softness: 2.0,
@@ -286,6 +291,15 @@ impl From<DirectionalLight> for Light {
     }
 }
 
+impl Light {
+    pub fn shadows(&self) -> bool {
+        match self {
+            Light::Point(_) => false,
+            Light::Directional(directional) => directional.shadows,
+        }
+    }
+}
+
 #[derive(Default, Bind)]
 pub struct LightBindings {
     #[uniform]
@@ -296,7 +310,6 @@ pub struct LightBindings {
     pub point_lights: StorageBuffer<RawPointLight>,
     #[uniform]
     pub directional_light_count: u32,
-    pub directional_indices: HashMap<LightId, usize>,
     #[storage_buffer]
     pub directional_lights: StorageBuffer<RawDirectionalLight>,
 }
@@ -304,23 +317,53 @@ pub struct LightBindings {
 impl LightBindings {
     pub fn clear(&mut self) {
         self.point_lights.clear();
-        self.directional_indices.clear();
         self.directional_lights.clear();
     }
 
-    pub fn push(&mut self, id: LightId, light: Light) {
-        match light {
-            Light::Point(point) => {
-                self.point_lights.push(point.raw());
-                self.point_light_count = self.point_lights.len() as u32;
-            }
-            Light::Directional(directional) => {
-                self.directional_indices
-                    .insert(id, self.directional_lights.len());
+    pub fn update_count(&mut self) {
+        self.point_light_count = self.point_lights.len() as u32;
+        self.directional_light_count = self.directional_lights.len() as u32;
+    }
+}
 
-                self.directional_lights.push(directional.raw(0));
-                self.directional_light_count = self.directional_lights.len() as u32;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PrepareLightsPhase;
+
+impl RenderPhase for PrepareLightsPhase {
+    fn prepare(&mut self, context: &PhaseContext, world: &World, resources: &mut Resources) {
+        let mut shadow_maps = resources
+            .remove()
+            .unwrap_or_else(|| ShadowMaps::new(context.device));
+        let light_bindings = resources.get_or_insert_with(|| LightBindings::default());
+        light_bindings.clear();
+
+        light_bindings.ambient_light = world.ambient().raw();
+
+        let mut cascade_count = 0;
+        for (id, light) in world.iter_lights() {
+            if !light.shadows() {
+                continue;
+            }
+
+            match light {
+                Light::Directional(directional) => {
+                    shadow_maps.cascades.insert(id, cascade_count);
+
+                    light_bindings
+                        .directional_lights
+                        .push(directional.raw(cascade_count));
+
+                    cascade_count += 4;
+                }
+                Light::Point(point) => {
+                    light_bindings.point_lights.push(point.raw());
+                }
             }
         }
+
+        light_bindings.update_count();
+        shadow_maps.resize_directional(context.device, cascade_count);
+
+        resources.insert(shadow_maps);
     }
 }

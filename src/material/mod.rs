@@ -589,7 +589,7 @@ impl RenderViewPhase for MaterialPhase {
 
 impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
     fn register(device: &Device, _queue: &Queue, resources: &mut Resources) {
-        let shader_processor = resources.get_mut_or_default::<ShaderProcessor>();
+        let shader_processor = resources.get_or_default::<ShaderProcessor>();
 
         let vertex = shader_processor.process(T::vertex_shader()).unwrap();
         let fragment = shader_processor.process(T::fragment_shader()).unwrap();

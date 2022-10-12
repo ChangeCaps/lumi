@@ -20,7 +20,7 @@ use crate::{
     bind::Bind,
     binding::{Bindings, BindingsLayout},
     id::{BufferId, LightId, RenderPipelineId},
-    light::{Light, LightBindings},
+    light::Light,
     material::{DrawCommand, Material, MeshNode},
     mesh::{Mesh, MeshBuffers},
     prelude::World,
@@ -379,22 +379,24 @@ impl RenderPhase for ShadowPhase {
         }
 
         let functions = resources.remove_keyed::<ShadowFunctions>();
-
-        let mut cascade_count = 0;
+        let shadow_maps = resources
+            .remove()
+            .unwrap_or_else(|| ShadowMaps::new(context.device));
 
         for (light_id, light) in world.iter_lights() {
+            if !light.shadows() {
+                continue;
+            }
+
             match light {
                 Light::Directional(directional) => {
-                    let light_bindings = resources.get_mut::<LightBindings>().unwrap();
-                    let i = light_bindings.directional_indices[&light_id];
-                    light_bindings.directional_lights[i].cascade = cascade_count;
-
                     for cascade in 0..4u32 {
-                        cascade_count += 1;
-
                         let view_proj = directional.view_proj(cascade);
 
-                        let target = ShadowTarget::Directional { view_proj, cascade };
+                        let target = ShadowTarget::Directional {
+                            view_proj,
+                            cascade: shadow_maps.cascades[&light_id] + cascade,
+                        };
 
                         let frustum = directional.render_frustum(cascade);
                         for function in functions.values() {
@@ -407,10 +409,6 @@ impl RenderPhase for ShadowPhase {
                 _ => {}
             }
         }
-
-        let shadow_maps = resources.get_mut_or_insert_with(|| ShadowMaps::new(context.device));
-
-        shadow_maps.resize_directional(context.device, cascade_count);
 
         let directional_view = shadow_maps.directional_view.clone();
 
@@ -431,6 +429,7 @@ impl RenderPhase for ShadowPhase {
         }
 
         resources.insert(functions);
+        resources.insert(shadow_maps);
     }
 
     fn render(
@@ -443,14 +442,21 @@ impl RenderPhase for ShadowPhase {
         let functions = resources.get_keyed::<ShadowFunctions>().unwrap();
 
         for (light_id, light) in world.iter_lights() {
+            if !light.shadows() {
+                continue;
+            }
+
             match light {
                 Light::Directional(directional) => {
                     for cascade in 0..4u32 {
                         let view_proj = directional.view_proj(cascade);
 
-                        let target = ShadowTarget::Directional { view_proj, cascade };
-
                         let shadow_maps = resources.get::<ShadowMaps>().unwrap();
+
+                        let target = ShadowTarget::Directional {
+                            view_proj,
+                            cascade: shadow_maps.cascades[&light_id] + cascade,
+                        };
                         let shadow_map = shadow_maps.get(target);
 
                         let mut draws = Vec::new();

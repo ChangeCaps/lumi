@@ -13,7 +13,7 @@ use crate::{
     environment::{PreparedEnvironment, Sky},
     frame_buffer::FrameBuffer,
     id::CameraId,
-    light::LightBindings,
+    light::PrepareLightsPhase,
     material::MaterialPhase,
     mesh::PrepareMeshPhase,
     resources::Resources,
@@ -155,7 +155,9 @@ impl Renderer {
 
     pub fn insert_default_phases(&mut self) {
         self.phases
-            .push(DefaultPhases::PrepareMesh, PrepareMeshPhase);
+            .push(DefaultPhases::PrepareMeshes, PrepareMeshPhase);
+        self.phases
+            .push(DefaultPhases::PrepareLights, PrepareLightsPhase);
         self.phases.push(DefaultPhases::Shadow, ShadowPhase);
 
         self.view_phases
@@ -170,12 +172,38 @@ impl Renderer {
         &mut self.phases
     }
 
+    #[track_caller]
+    pub fn phase<T: RenderPhase>(&self, label: impl Into<PhaseLabel>) -> &T {
+        self.phases.get::<T>(label).expect("RenderPhase not found")
+    }
+
+    #[track_caller]
+    pub fn phase_mut<T: RenderPhase>(&mut self, label: impl Into<PhaseLabel>) -> &mut T {
+        self.phases
+            .get_mut::<T>(label)
+            .expect("RenderPhase not found")
+    }
+
     pub fn view_phases(&self) -> &RenderViewPhases {
         &self.view_phases
     }
 
     pub fn view_phases_mut(&mut self) -> &mut RenderViewPhases {
         &mut self.view_phases
+    }
+
+    #[track_caller]
+    pub fn view_phase<T: RenderViewPhase>(&self, label: impl Into<PhaseLabel>) -> &T {
+        self.view_phases
+            .get::<T>(label)
+            .expect("RenderViewPhase not found")
+    }
+
+    #[track_caller]
+    pub fn view_phase_mut<T: RenderViewPhase>(&mut self, label: impl Into<PhaseLabel>) -> &mut T {
+        self.view_phases
+            .get_mut::<T>(label)
+            .expect("RenderViewPhase not found")
     }
 
     pub fn settings(&self) -> &RenderSettings {
@@ -208,17 +236,6 @@ impl Renderer {
             world,
             &mut self.resources,
         );
-    }
-
-    pub fn prepare_lights(&mut self, world: &World) {
-        let light_bindings = self.resources.get_mut_or_default::<LightBindings>();
-        light_bindings.clear();
-
-        light_bindings.ambient_light = world.ambient().raw();
-
-        for (id, light) in world.iter_lights() {
-            light_bindings.push(id, light.clone());
-        }
     }
 
     pub fn prepare_cameras(&mut self, device: &Device, world: &World, target: &RenderTarget<'_>) {
@@ -280,7 +297,6 @@ impl Renderer {
         target: &RenderTarget<'_>,
     ) {
         self.register(device, queue, world);
-        self.prepare_lights(world);
         self.prepare_cameras(device, world, target);
         self.prepare_environment(device, queue, world);
 
