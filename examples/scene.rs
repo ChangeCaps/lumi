@@ -16,7 +16,6 @@ struct Scene {
 impl App for Scene {
     fn init(world: &mut World, renderer: &mut Renderer) -> Self {
         renderer.settings_mut().render_sky = true;
-        renderer.settings_mut().sample_count = 4;
 
         let scene = MeshNode::open_gltf("examples/assets/scene.glb").unwrap();
         world.add(scene);

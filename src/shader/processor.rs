@@ -317,9 +317,9 @@ impl ShaderProcessor {
         add_module!("shadow.wgsl", "wgsl/shadow.wgsl");
         add_module!("shadow_mesh.wgsl", "wgsl/shadow_mesh.wgsl");
 
-        add_module!("gaussian.wgsl", "wgsl/gaussian.wgsl");
         add_module!("unlit.wgsl", "wgsl/unlit.wgsl");
         add_module!("sky_vert.wgsl", "wgsl/sky_vert.wgsl");
+        add_module!("fxaa_frag.wgsl", "wgsl/fxaa_frag.wgsl");
         add_module!("fullscreen_vert.wgsl", "wgsl/fullscreen_vert.wgsl");
         add_module!("bloom_frag.wgsl", "wgsl/bloom_frag.wgsl");
         add_module!("tonemapping_frag.wgsl", "wgsl/tonemapping_frag.wgsl");

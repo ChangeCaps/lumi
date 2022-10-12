@@ -4,9 +4,9 @@ use std::path::Path;
 use lumi_bake::{BakedEnvironment, EnvironmentData};
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthStencilState, Device,
-    Extent3d, FragmentState, MultisampleState, PipelineLayout, PipelineLayoutDescriptor, Queue,
-    RenderPass, RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
+    Extent3d, FragmentState, PipelineLayout, PipelineLayoutDescriptor, Queue, RenderPass,
+    RenderPipeline, RenderPipelineDescriptor, ShaderModule, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
 };
 
 use crate::{
@@ -216,7 +216,6 @@ pub struct Sky {
     pub bindings: HashMap<CameraId, Bindings>,
     pub pipeline_layout: PipelineLayout,
     pub pipeline: RenderPipeline,
-    pub sample_count: u32,
     pub integrated_brdf: SharedTextureView,
 }
 
@@ -226,7 +225,6 @@ impl Sky {
         pipeline_layout: &PipelineLayout,
         vertex: &ShaderModule,
         fragment: &ShaderModule,
-        sample_count: u32,
     ) -> RenderPipeline {
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Sky Pipeline"),
@@ -253,20 +251,12 @@ impl Sky {
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
-            multisample: MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
+            multisample: Default::default(),
             multiview: Default::default(),
         })
     }
 
-    pub fn new(
-        device: &Device,
-        queue: &Queue,
-        shader_processor: &mut ShaderProcessor,
-        sample_count: u32,
-    ) -> Self {
+    pub fn new(device: &Device, queue: &Queue, shader_processor: &mut ShaderProcessor) -> Self {
         let mut vertex = shader_processor
             .process(ShaderRef::module("lumi/sky_vert.wgsl"), &Default::default())
             .unwrap();
@@ -293,8 +283,7 @@ impl Sky {
 
         let vertex = vertex.create_shader_module(device);
         let fragment = fragment.create_shader_module(device);
-        let pipeline =
-            Self::create_pipeline(device, &pipeline_layout, &vertex, &fragment, sample_count);
+        let pipeline = Self::create_pipeline(device, &pipeline_layout, &vertex, &fragment);
 
         let integrated_brdf = device.create_shared_texture_with_data(
             queue,
@@ -321,7 +310,6 @@ impl Sky {
             bindings: HashMap::default(),
             pipeline_layout,
             pipeline,
-            sample_count,
             integrated_brdf: integrated_brdf.create_view(&Default::default()),
         }
     }
@@ -331,21 +319,9 @@ impl Sky {
         device: &Device,
         queue: &Queue,
         world: &World,
-        sample_count: u32,
         target: &RenderTarget,
         environment: &PreparedEnvironment,
     ) {
-        if self.sample_count != sample_count {
-            self.sample_count = sample_count;
-            self.pipeline = Self::create_pipeline(
-                device,
-                &self.pipeline_layout,
-                &self.vertex,
-                &self.fragment,
-                sample_count,
-            );
-        }
-
         for (camera_id, camera) in world.iter_cameras() {
             let bindings = self
                 .bindings

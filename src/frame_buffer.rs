@@ -10,14 +10,14 @@ use crate::{Device, SharedDevice, SharedTexture, SharedTextureView};
 pub struct FrameBuffer {
     pub hdr: SharedTexture,
     pub hdr_view: SharedTextureView,
-    pub hdr_msaa: Option<SharedTexture>,
-    pub hdr_msaa_view: Option<SharedTextureView>,
+    pub offscreen_hdr: SharedTexture,
+    pub offscreen_hdr_view: SharedTextureView,
     pub depth: SharedTexture,
     pub depth_view: SharedTextureView,
 }
 
 impl FrameBuffer {
-    pub fn new(device: &Device, width: u32, height: u32, sample_count: u32) -> Self {
+    pub fn new(device: &Device, width: u32, height: u32) -> Self {
         let hdr = device.create_shared_texture(&TextureDescriptor {
             label: Some("Lumi HDR Target"),
             size: Extent3d {
@@ -34,23 +34,22 @@ impl FrameBuffer {
                 | TextureUsages::COPY_SRC,
         });
 
-        let hdr_msaa = if sample_count > 1 {
-            Some(device.create_shared_texture(&TextureDescriptor {
-                label: Some("Lumi HDR MSAA Target"),
-                size: Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Rgba16Float,
-                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            }))
-        } else {
-            None
-        };
+        let offscreen_hdr = device.create_shared_texture(&TextureDescriptor {
+            label: Some("Lumi Offscreen HDR Target"),
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba16Float,
+            usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST,
+        });
 
         let depth = device.create_shared_texture(&TextureDescriptor {
             label: Some("Lumi Depth Target"),
@@ -60,70 +59,24 @@ impl FrameBuffer {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count,
+            sample_count: 1,
             dimension: TextureDimension::D2,
             format: TextureFormat::Depth32Float,
             usage: TextureUsages::RENDER_ATTACHMENT,
         });
 
         let hdr_view = hdr.create_view(&Default::default());
-        let hdr_msaa_view = hdr_msaa
-            .as_ref()
-            .map(|t| t.create_view(&Default::default()));
+        let offscreen_hdr_view = offscreen_hdr.create_view(&Default::default());
         let depth_view = depth.create_view(&Default::default());
 
         Self {
             hdr,
             hdr_view,
-            hdr_msaa,
-            hdr_msaa_view,
+            offscreen_hdr,
+            offscreen_hdr_view,
             depth,
             depth_view,
         }
-    }
-
-    pub fn set_sample_count(&mut self, device: &Device, sample_count: u32) {
-        if self.sample_count() != sample_count {
-            self.depth = device.create_shared_texture(&TextureDescriptor {
-                label: Some("Lumi Depth Target"),
-                size: Extent3d {
-                    width: self.width(),
-                    height: self.height(),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Depth32Float,
-                usage: TextureUsages::RENDER_ATTACHMENT,
-            });
-
-            self.depth_view = self.depth.create_view(&Default::default());
-        }
-
-        if self.hdr_msaa.is_some() && sample_count == 1 {
-            self.hdr_msaa = None;
-            self.hdr_msaa_view = None;
-        } else if sample_count > 1 && self.sample_count() != sample_count {
-            self.hdr_msaa = Some(device.create_shared_texture(&TextureDescriptor {
-                label: Some("Lumi HDR MSAA Target"),
-                size: self.size(),
-                mip_level_count: 1,
-                sample_count,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Rgba16Float,
-                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            }));
-
-            self.hdr_msaa_view = self
-                .hdr_msaa
-                .as_ref()
-                .map(|t| t.create_view(&Default::default()));
-        }
-    }
-
-    pub fn sample_count(&self) -> u32 {
-        self.hdr_msaa.as_ref().map_or(1, |t| t.sample_count())
     }
 
     pub fn width(&self) -> u32 {
@@ -144,8 +97,26 @@ impl FrameBuffer {
 
     pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
         if self.width() != width || self.height() != height {
-            *self = Self::new(device, width, height, self.sample_count());
+            *self = Self::new(device, width, height);
         }
+    }
+
+    pub fn copy_offscreen(&self, encoder: &mut CommandEncoder) {
+        encoder.copy_texture_to_texture(
+            wgpu::ImageCopyTexture {
+                texture: self.hdr.texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::ImageCopyTexture {
+                texture: self.offscreen_hdr.texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            self.size(),
+        );
     }
 
     pub fn begin_hdr_render_pass<'a>(
@@ -168,8 +139,8 @@ impl FrameBuffer {
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Lumi HDR Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &self.hdr_msaa_view.as_ref().unwrap_or(&self.hdr_view),
-                resolve_target: self.hdr_msaa_view.as_ref().map(|_| self.hdr_view.view()),
+                view: &self.hdr_view,
+                resolve_target: None,
                 ops: Operations {
                     load: color_load,
                     store: true,

@@ -15,7 +15,7 @@ use crate::{
 struct ToneMappingBindings<'a> {
     #[texture]
     hdr_texture: &'a SharedTextureView,
-    #[sampler(filtering = false)]
+    #[sampler]
     hdr_sampler: &'a SharedSampler,
 }
 
@@ -77,8 +77,8 @@ impl ToneMapping {
             address_mode_u: AddressMode::ClampToEdge,
             address_mode_v: AddressMode::ClampToEdge,
             address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Nearest,
-            min_filter: FilterMode::Nearest,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
             ..Default::default()
         });
 

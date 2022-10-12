@@ -7,7 +7,7 @@ use glam::{Mat4, Vec3};
 use smallvec::SmallVec;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction, DepthBiasState,
-    DepthStencilState, Device, FragmentState, IndexFormat, MultisampleState, PipelineLayout,
+    DepthStencilState, Device, FragmentState, IndexFormat, PipelineLayout,
     PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPass, RenderPipelineDescriptor,
     StencilState, TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
     VertexStepMode,
@@ -27,7 +27,7 @@ use crate::{
     mesh::{Mesh, MeshBuffers, PrepareMeshFn},
     prelude::World,
     renderable::Renderable,
-    renderer::{RenderSettings, RenderViewPhase, ViewPhaseContext},
+    renderer::{RenderViewPhase, ViewPhaseContext},
     resources::Resources,
     shader::{DefaultShader, Shader, ShaderDefs, ShaderProcessor, ShaderRef},
     shadow::{ShadowFunctions, ShadowReceiverBindings},
@@ -159,14 +159,12 @@ pub struct MeshNodePipeline {
     pub material_pipeline: MaterialPipeline,
     pub pipeline_layout: PipelineLayout,
     pub render_pipeline: SharedRenderPipeline,
-    pub sample_count: u32,
 }
 
 impl MeshNodePipeline {
     pub fn new<T: Material>(
         device: &Device,
         shader_defs: &ShaderDefs,
-        sample_count: u32,
         shader_processor: &mut ShaderProcessor,
     ) -> Self {
         let vertex = shader_processor
@@ -212,7 +210,6 @@ impl MeshNodePipeline {
             device,
             &pipeline_layout,
             &mut material_pipeline,
-            sample_count,
         );
 
         MeshNodePipeline {
@@ -220,7 +217,6 @@ impl MeshNodePipeline {
             material_pipeline,
             pipeline_layout,
             render_pipeline,
-            sample_count,
         }
     }
 
@@ -228,7 +224,6 @@ impl MeshNodePipeline {
         device: &Device,
         pipeline_layout: &PipelineLayout,
         material_pipeline: &mut MaterialPipeline,
-        sample_count: u32,
     ) -> SharedRenderPipeline {
         let vertex_attributes = material_pipeline
             .vertices
@@ -278,25 +273,9 @@ impl MeshNodePipeline {
                 stencil: StencilState::default(),
                 bias: DepthBiasState::default(),
             }),
-            multisample: MultisampleState {
-                count: sample_count,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: Default::default(),
             multiview: None,
         })
-    }
-
-    pub fn recreate_pipeline(&mut self, device: &Device, sample_count: u32) {
-        if self.sample_count != sample_count {
-            self.sample_count = sample_count;
-            self.render_pipeline = Self::create_render_pipeline(
-                device,
-                &self.pipeline_layout,
-                &mut self.material_pipeline,
-                sample_count,
-            );
-        }
     }
 }
 
@@ -483,14 +462,11 @@ impl MaterialFunctions {
                         let key = PipelineKey::new(&shader_defs);
 
                         if !pipelines.contains(&key) {
-                            let sample_count =
-                                resources.get::<RenderSettings>().unwrap().sample_count;
                             let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
 
                             let pipeline = MeshNodePipeline::new::<T>(
                                 context.device,
                                 &shader_defs,
-                                sample_count,
                                 shader_processor,
                             );
 
@@ -662,12 +638,6 @@ impl RenderViewPhase for MaterialPhase {
         }
         ssr.prepare_downsample_bindings(&context.device, &context.queue, &target.hdr_view, 4.0);
 
-        let sample_count = resources.get::<RenderSettings>().unwrap().sample_count;
-
-        for pipeline in resources.iter_mut::<MeshNodePipeline>() {
-            pipeline.recreate_pipeline(&context.device, sample_count);
-        }
-
         let material_functions = resources.remove_keyed::<MaterialFunctions>();
 
         let ssr = self.ssr_mip_chain.as_ref().unwrap().view.clone();
@@ -765,12 +735,10 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
             }
         });
 
-        let sample_count = resources.get::<RenderSettings>().unwrap().sample_count;
         let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
         let shader_defs = ShaderDefs::default();
         let key = PipelineKey::new(&shader_defs);
-        let pipeline =
-            MeshNodePipeline::new::<T>(device, &shader_defs, sample_count, shader_processor);
+        let pipeline = MeshNodePipeline::new::<T>(device, &shader_defs, shader_processor);
 
         let mut mesh_node_pipelines = MeshNodePipelines::default();
         mesh_node_pipelines.push(key, pipeline);

@@ -13,6 +13,7 @@ pub mod camera;
 pub mod device;
 pub mod environment;
 pub mod frame_buffer;
+pub mod fxaa;
 #[cfg(feature = "gltf")]
 pub mod gltf;
 pub mod id;
