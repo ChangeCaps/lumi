@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use std::path::Path;
 
 use lumi_bake::{BakedEnvironment, EnvironmentData};
@@ -41,6 +42,7 @@ impl Default for Environment {
 }
 
 impl Environment {
+    #[inline]
     pub fn new(image: ImageData) -> Self {
         Self {
             kind: EnvironmentKind::RealTime(image),
@@ -48,12 +50,15 @@ impl Environment {
         }
     }
 
+    #[inline]
+    #[cfg(feature = "image")]
     pub fn open(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = ImageData::open_hdr(path)?;
 
         Ok(Self::new(image))
     }
 
+    #[inline]
     pub fn bake(&self, device: &Device, queue: &Queue) -> BakedEnvironment {
         match &self.kind {
             EnvironmentKind::Baked(data) => BakedEnvironment::from_data(device, queue, data),
@@ -70,6 +75,7 @@ impl Environment {
         }
     }
 
+    #[inline]
     pub fn id(&self) -> EnvironmentId {
         self.id
     }

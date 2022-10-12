@@ -64,12 +64,14 @@ impl Image {
     }
 
     #[inline]
+    #[cfg(feature = "image")]
     pub fn open_srgb(path: &str) -> Result<Self, image::ImageError> {
         let image = ImageData::open_srgb(path)?;
         Ok(Self::new(image))
     }
 
     #[inline]
+    #[cfg(feature = "image")]
     pub fn open_hdr(path: &str) -> Result<Self, image::ImageError> {
         let image = ImageData::open_hdr(path)?;
         Ok(Self::new(image))

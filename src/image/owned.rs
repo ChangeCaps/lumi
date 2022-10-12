@@ -1,4 +1,6 @@
-use std::{num::NonZeroU32, path::Path};
+use std::num::NonZeroU32;
+#[allow(unused_imports)]
+use std::path::Path;
 
 use wgpu::{
     Extent3d, FilterMode, SamplerDescriptor, TextureDimension, TextureFormat, TextureUsages,
@@ -54,6 +56,7 @@ impl ImageData {
     }
 
     #[inline]
+    #[cfg(feature = "image")]
     pub fn open_srgb(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = image::open(path)?;
         let width = image.width();
@@ -63,6 +66,7 @@ impl ImageData {
     }
 
     #[inline]
+    #[cfg(feature = "image")]
     pub fn open_hdr(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let image = image::open(path)?;
         let width = image.width();

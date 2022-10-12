@@ -25,6 +25,8 @@ impl NormalMap {
         Self(image)
     }
 
+    #[inline]
+    #[cfg(feature = "image")]
     pub fn open(path: &str) -> Result<Self, image::ImageError> {
         let image = Image::open_srgb(path)?;
         Ok(image.into())
