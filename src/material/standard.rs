@@ -124,6 +124,26 @@ impl Material for StandardMaterial {
     fn shader_defs(&self) -> ShaderDefs {
         let mut shader_defs = ShaderDefs::default();
 
+        if self.base_color_texture.is_some() {
+            shader_defs.set("BASE_COLOR_TEXTURE");
+        }
+
+        if self.metallic_roughness_texture.is_some() {
+            shader_defs.set("METALLIC_ROUGHNESS_TEXTURE");
+        }
+
+        if self.emissive_map.is_some() {
+            shader_defs.set("EMISSIVE_MAP");
+        }
+
+        if self.normal_map.is_some() {
+            shader_defs.set("NORMAL_MAP");
+        }
+
+        if self.clearcoat_normal_map.is_some() {
+            shader_defs.set("CLEARCOAT_NORMAL_MAP");
+        }
+
         if self.clearcoat > 0.0 {
             shader_defs.set("CLEARCOAT");
         }
