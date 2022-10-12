@@ -131,32 +131,21 @@ impl CachedShader {
     }
 
     fn find_end(mut source: &str) -> Option<usize> {
-        let mut directives = 0;
+        let mut offset = 0;
 
         loop {
             let end = source.find(ENDIF_DIRECTIVE)?;
 
-            if let Some((index, is_def)) = Self::find_def_directive(&source[..end]) {
-                directives += 1;
-                source = &source[index + Self::def_len(is_def)..];
+            if Self::find_def_directive(&source[..end]).is_some() {
+                source = &source[end + ENDIF_DIRECTIVE.len()..];
+                offset += end + ENDIF_DIRECTIVE.len();
             } else {
-                if directives == 0 {
-                    return Some(end);
-                } else {
-                    directives -= 1;
-                    source = &source[end + ENDIF_DIRECTIVE.len()..];
-                }
+                break Some(offset + end);
             }
         }
     }
 
-    fn parse(
-        parent_path: Option<&Path>,
-        source: &str,
-        defs: &ShaderDefs,
-    ) -> Result<Self, ShaderError> {
-        let source = Self::strip_comments(source)?;
-        let mut source = source.as_str();
+    fn process_defs(mut source: &str, defs: &ShaderDefs) -> Result<String, ShaderError> {
         let mut stripped_source = String::new();
 
         loop {
@@ -180,7 +169,9 @@ impl CachedShader {
                 let end = Self::find_end(source).ok_or_else(|| ShaderError::UnclosedDirective)?;
 
                 if defs.contains(def) == is_def {
-                    stripped_source.push_str(&source[..end]);
+                    let inner = Self::process_defs(&source[..end], defs)?;
+
+                    stripped_source.push_str(&inner);
                 }
 
                 source = &source[end + ENDIF_DIRECTIVE.len()..];
@@ -189,6 +180,17 @@ impl CachedShader {
                 break;
             }
         }
+
+        Ok(stripped_source)
+    }
+
+    fn parse(
+        parent_path: Option<&Path>,
+        source: &str,
+        defs: &ShaderDefs,
+    ) -> Result<Self, ShaderError> {
+        let source = Self::strip_comments(source)?;
+        let stripped_source = Self::process_defs(&source, defs)?;
 
         let mut source = stripped_source.as_str();
         let mut stripped_source = String::new();
@@ -239,6 +241,12 @@ impl ShaderDefs {
     #[inline]
     pub fn contains(&self, def: &str) -> bool {
         self.defs.contains(&Cow::Borrowed(def))
+    }
+
+    #[inline]
+    pub fn finish(&mut self) {
+        self.defs.dedup();
+        self.defs.sort_unstable();
     }
 }
 

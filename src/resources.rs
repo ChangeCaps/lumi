@@ -80,6 +80,10 @@ impl Resources {
         self.get_keyed_mut().remove(key)
     }
 
+    pub fn remove_key_or_default<T: Resource + Default>(&mut self, key: &dyn Key) -> T {
+        self.remove_key(key).unwrap_or_default()
+    }
+
     #[inline]
     pub fn get<T: Resource>(&self) -> Option<&T> {
         let resource = self.typed.get(&TypeId::of::<T>())?;

@@ -1,7 +1,7 @@
 mod standard;
 mod unlit;
 
-use std::{any::TypeId, borrow::Cow};
+use std::{any::TypeId, borrow::Cow, hash::Hasher};
 
 use glam::{Mat4, Vec3};
 use smallvec::SmallVec;
@@ -22,6 +22,7 @@ use crate::{
     environment::{EnvironmentBindings, PreparedEnvironment},
     frame_buffer::FrameBuffer,
     id::{CameraId, NodeId},
+    key_map::Key,
     light::LightBindings,
     mesh::{Mesh, MeshBuffers, PrepareMeshFn},
     prelude::World,
@@ -107,6 +108,49 @@ pub struct Primitive<T = StandardMaterial> {
 impl<T> Primitive<T> {
     pub fn new(material: T, mesh: Mesh) -> Self {
         Self { material, mesh }
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PipelineKey {
+    hash: u64,
+}
+
+impl PipelineKey {
+    #[inline]
+    pub fn new(shader_defs: &ShaderDefs) -> Self {
+        let mut hasher = ahash::AHasher::default();
+
+        shader_defs.hash(&mut hasher);
+
+        Self {
+            hash: hasher.finish(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct MeshNodePipelines {
+    pipelines: Vec<(PipelineKey, MeshNodePipeline)>,
+}
+
+impl MeshNodePipelines {
+    pub fn contains(&self, key: &PipelineKey) -> bool {
+        self.pipelines
+            .iter()
+            .any(|(pipeline_key, _)| pipeline_key == key)
+    }
+
+    pub fn get(&self, key: &PipelineKey) -> Option<&MeshNodePipeline> {
+        self.pipelines
+            .iter()
+            .find(|(pipeline_key, _)| pipeline_key == key)
+            .map(|(_, pipelines)| pipelines)
+    }
+
+    pub fn push(&mut self, key: PipelineKey, pipelines: MeshNodePipeline) {
+        self.pipelines.push((key, pipelines));
     }
 }
 
@@ -314,7 +358,7 @@ impl<T> MeshNode<T> {
 
 #[derive(Default)]
 struct MaterialState {
-    bindings: HashMap<CameraId, Vec<(Bindings, ShaderDefs)>>,
+    bindings: HashMap<CameraId, Vec<(Bindings, PipelineKey)>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -426,41 +470,45 @@ impl MaterialFunctions {
     fn new<T: Material + Send + Sync>() -> Self {
         Self {
             prepare: |phase, context, ssr, world, resources| {
+                let mut pipelines =
+                    resources.remove_key_or_default::<MeshNodePipelines>(&TypeId::of::<T>());
+
                 for (node_id, node) in world.iter_nodes::<MeshNode<T>>() {
                     let state = phase.node_state.entry(node_id).or_default();
 
                     let bindings = state.bindings.entry(context.view.camera).or_default();
 
                     for (i, primitive) in node.primitives.iter().enumerate() {
-                        let key = (TypeId::of::<T>(), primitive.material.shader_defs());
+                        let shader_defs = primitive.material.shader_defs();
+                        let key = PipelineKey::new(&shader_defs);
 
-                        if !resources.contains_key::<MeshNodePipeline>(&key) {
+                        if !pipelines.contains(&key) {
                             let sample_count =
                                 resources.get::<RenderSettings>().unwrap().sample_count;
                             let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
 
                             let pipeline = MeshNodePipeline::new::<T>(
                                 context.device,
-                                &key.1,
+                                &shader_defs,
                                 sample_count,
                                 shader_processor,
                             );
 
-                            resources.insert_key(key.clone(), pipeline);
+                            pipelines.push(key.clone(), pipeline);
                         }
 
-                        let pipeline = resources.get_key::<MeshNodePipeline>(&key).unwrap();
+                        let pipeline = pipelines.get(&key).unwrap();
 
                         if bindings.len() <= i {
                             bindings.push((
                                 pipeline.bindings_layout.create_bindings(context.device),
-                                key.1,
+                                key,
                             ));
                         } else {
-                            if bindings[0].1 != key.1 {
+                            if bindings[i].1 != key {
                                 bindings[i] = (
                                     pipeline.bindings_layout.create_bindings(context.device),
-                                    key.1,
+                                    key,
                                 );
                             }
                         }
@@ -509,8 +557,14 @@ impl MaterialFunctions {
                         bindings.update_bind_groups(&context.device);
                     }
                 }
+
+                resources.insert_key(TypeId::of::<T>(), pipelines);
             },
             render: |phase, context, world, resources, draws| {
+                let pipelines = resources
+                    .get_key::<MeshNodePipelines>(&TypeId::of::<T>())
+                    .unwrap();
+
                 for (node_id, node) in world.iter_nodes::<MeshNode<T>>() {
                     let state = phase.node_state.get(&node_id).unwrap();
 
@@ -518,10 +572,8 @@ impl MaterialFunctions {
 
                     for (primitive, (bindings, _)) in node.primitives.iter().zip(bindings.iter()) {
                         let shader_defs = primitive.material.shader_defs();
-
-                        let pipeline = resources
-                            .get_key::<MeshNodePipeline>(&(TypeId::of::<T>(), shader_defs))
-                            .unwrap();
+                        let key = PipelineKey::new(&shader_defs);
+                        let pipeline = pipelines.get(&key).unwrap();
 
                         if let Some(aabb) = resources.get_key::<Aabb>(&primitive.mesh.id()) {
                             if !context.view.intersects(aabb, node.transform) {
@@ -634,7 +686,7 @@ impl RenderViewPhase for MaterialPhase {
         world: &World,
         resources: &Resources,
     ) {
-        let mut draws = Vec::new();
+        let mut draws = Vec::with_capacity(1024);
 
         for material_function in resources.iter::<MaterialFunctions>() {
             (material_function.render)(self, context, world, resources, &mut draws);
@@ -716,10 +768,14 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
         let sample_count = resources.get::<RenderSettings>().unwrap().sample_count;
         let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
         let shader_defs = ShaderDefs::default();
+        let key = PipelineKey::new(&shader_defs);
         let pipeline =
             MeshNodePipeline::new::<T>(device, &shader_defs, sample_count, shader_processor);
 
-        resources.insert_key((TypeId::of::<T>(), shader_defs), pipeline);
+        let mut mesh_node_pipelines = MeshNodePipelines::default();
+        mesh_node_pipelines.push(key, pipeline);
+
+        resources.insert_key(TypeId::of::<T>(), mesh_node_pipelines);
         resources.insert_key(TypeId::of::<T>(), MaterialFunctions::new::<T>());
         resources.insert_key(TypeId::of::<T>(), prepare_mesh_fn);
         resources.insert_key(TypeId::of::<T>(), ShadowFunctions::new_mesh_node::<T>());
