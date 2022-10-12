@@ -14,7 +14,7 @@ fn pbr_light(pbr: Pbr) -> vec4<f32> {
 	var color = pbr_lights(pixel);
 
 	let emissive_luminance = pow(2.0, camera.ev100 + pbr.emissive_exposure_compensation - 3.0);
-	color += pbr.emissive * emissive_luminance * pbr.base_color.a;
+	color += pbr.emissive * pbr.emissive_factor * emissive_luminance * pbr.base_color.a;
 
 	color *= camera.exposure;
 	color += environment(pixel);

@@ -13,7 +13,8 @@ struct Pbr {
 	roughness: f32,	
 	reflectance: f32,
 	emissive: vec3<f32>,
-	emissive_exposure_compensation: f32,	
+	emissive_factor: f32,
+	emissive_exposure_compensation: f32,
 
 #ifdef CLEARCOAT
 	clearcoat: f32,
@@ -50,6 +51,7 @@ fn default_pbr(mesh: Mesh) -> Pbr {
 	out.roughness = 0.089;	
 	out.reflectance = 0.5;
 	out.emissive = vec3<f32>(0.0);
+	out.emissive_factor = 8.0;
 	out.emissive_exposure_compensation = 0.0;
 
 #ifdef CLEARCOAT
