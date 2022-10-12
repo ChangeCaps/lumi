@@ -3,22 +3,14 @@ mod util;
 use std::time::Instant;
 
 use lumi::prelude::*;
-use util::App;
-use winit::event::{DeviceEvent, ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent};
+use util::{App, CameraController};
+use winit::event::Event;
 
 struct Scene {
     camera: CameraId,
-    rotate: bool,
-    position: Vec3,
-    rotation: Vec2,
+    camera_controller: CameraController,
     last_frame: Instant,
     frame_times: Vec<f32>,
-}
-
-impl Scene {
-    pub fn rotation(&self) -> Mat4 {
-        Mat4::from_rotation_y(self.rotation.x) * Mat4::from_rotation_x(self.rotation.y)
-    }
 }
 
 impl App for Scene {
@@ -47,51 +39,19 @@ impl App for Scene {
 
         Self {
             camera,
-            rotate: false,
-            position: Vec3::ZERO,
-            rotation: Vec2::ZERO,
+            camera_controller: CameraController::default(),
             last_frame: Instant::now(),
             frame_times: Vec::new(),
         }
     }
 
     fn event(&mut self, _world: &mut World, event: &Event<()>) {
-        match event {
-            Event::DeviceEvent { event, .. } => match event {
-                DeviceEvent::MouseMotion { delta } => {
-                    if self.rotate {
-                        self.rotation -= Vec2::new(delta.0 as f32, delta.1 as f32) * 0.001;
-                    }
-                }
-                DeviceEvent::MouseWheel { delta } => {
-                    let delta = match delta {
-                        MouseScrollDelta::LineDelta(_, y) => *y,
-                        MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
-                    };
-
-                    let direction = self.rotation().transform_vector3(Vec3::new(0.0, 0.0, -1.0));
-
-                    self.position -= direction * delta * 0.001;
-                }
-                _ => {}
-            },
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::MouseInput { state, button, .. } => {
-                    if *button == MouseButton::Right {
-                        self.rotate = *state == ElementState::Pressed;
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
-        }
+        self.camera_controller.event(event);
     }
 
     fn render(&mut self, world: &mut World, _renderer: &mut Renderer, ctx: &egui::Context) {
         let mut camera = world.camera_mut(self.camera);
-        camera.view = Mat4::from_translation(self.position)
-            * Mat4::from_rotation_y(self.rotation.x)
-            * Mat4::from_rotation_x(self.rotation.y);
+        camera.view = self.camera_controller.view();
 
         egui::Window::new("Information").show(ctx, |ui| {
             let frame_time = self.frame_times.iter().sum::<f32>() / self.frame_times.len() as f32;

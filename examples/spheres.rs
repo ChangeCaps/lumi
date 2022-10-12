@@ -1,16 +1,17 @@
 mod util;
 
+use std::time::Instant;
+
 use lumi::prelude::*;
-use util::App;
-use winit::event::{DeviceEvent, ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent};
+use util::{App, CameraController};
+use winit::event::Event;
 
 struct Spheres {
     camera: CameraId,
+    camera_controller: CameraController,
     material: StandardMaterial,
     spheres: Vec<NodeId>,
-    rotate: bool,
-    rotation: Vec2,
-    distance: f32,
+    start: Instant,
 }
 
 impl App for Spheres {
@@ -64,50 +65,20 @@ impl App for Spheres {
 
         Self {
             camera,
+            camera_controller: CameraController::default(),
             spheres: suzannes,
             material,
-            rotate: false,
-            rotation: Vec2::ZERO,
-            distance: 4.0,
+            start: Instant::now(),
         }
     }
 
     fn event(&mut self, _world: &mut World, event: &Event<()>) {
-        match event {
-            Event::DeviceEvent { event, .. } => match event {
-                DeviceEvent::MouseMotion { delta } => {
-                    if self.rotate {
-                        self.rotation -= Vec2::new(delta.0 as f32, delta.1 as f32) * 0.001;
-                    }
-                }
-                DeviceEvent::MouseWheel { delta } => {
-                    let delta = match delta {
-                        MouseScrollDelta::LineDelta(_, y) => *y,
-                        MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
-                    };
-
-                    self.distance += delta * 0.005;
-                }
-                _ => {}
-            },
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::MouseInput { state, button, .. } => {
-                    if *button == MouseButton::Right {
-                        self.rotate = *state == ElementState::Pressed;
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
-        }
+        self.camera_controller.event(event);
     }
 
     fn render(&mut self, world: &mut World, _renderer: &mut Renderer, ctx: &egui::Context) {
         let camera = world.camera_mut(self.camera);
-        let mut rotation = Mat4::from_rotation_y(self.rotation.x);
-        rotation *= Mat4::from_rotation_x(self.rotation.y);
-
-        camera.view = rotation * Mat4::from_translation(Vec3::new(0.0, 0.0, self.distance));
+        camera.view = self.camera_controller.view();
 
         egui::Window::new("World").show(ctx, |ui| {
             egui::Grid::new("world").show(ui, |ui| {
@@ -191,8 +162,16 @@ impl App for Spheres {
             });
         });
 
+        let t = self.start.elapsed().as_secs_f32();
         for &sphere in &self.spheres {
-            world.node_mut::<MeshNode>(sphere).primitives[0].material = self.material.clone();
+            let spheres = world.node_mut::<MeshNode>(sphere);
+            spheres.primitives[0].material = self.material.clone();
+
+            let (_, _, translation) = spheres.transform.to_scale_rotation_translation();
+            let x = (translation.x + t).sin() * 0.5 + 0.5;
+            let z = (translation.z * 2.0 + t).sin() * 0.5 + 0.5;
+            let h = x + z;
+            spheres.transform = Mat4::from_translation(Vec3::new(translation.x, h, translation.z));
         }
     }
 }
