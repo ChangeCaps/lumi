@@ -1,7 +1,4 @@
-struct StandardMaterial {
-	thickness: f32,
-	subsurface_power: f32,
-	subsurface_color: vec3<f32>,
+struct StandardMaterial {	
 	base_color: vec4<f32>,
 	alpha_cutoff: f32,
 	metallic: f32,
@@ -10,7 +7,11 @@ struct StandardMaterial {
 	clearcoat_roughness: f32,
 	reflectance: f32,
 	emissive: vec3<f32>,
-	emissive_exposure_compensation: f32,
+	emissive_factor: f32,
+	emissive_exposure_compensation: f32,	
+	thickness: f32,
+	subsurface_power: f32,
+	subsurface_color: vec3<f32>,
 	transmission: f32,
 	ior: f32,
 	absorption: vec3<f32>,

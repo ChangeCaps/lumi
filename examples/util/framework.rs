@@ -51,7 +51,7 @@ pub fn framework<T: App>() -> ! {
         format: TextureFormat::Bgra8UnormSrgb,
         width: window.inner_size().width,
         height: window.inner_size().height,
-        present_mode: PresentMode::Fifo,
+        present_mode: PresentMode::Immediate,
         alpha_mode: CompositeAlphaMode::Auto,
     };
     let mut resized = true;

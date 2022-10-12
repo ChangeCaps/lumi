@@ -28,10 +28,16 @@ pub struct ToneMapping {
 impl ToneMapping {
     pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
         let mut vertex = shader_processor
-            .process(ShaderRef::module("lumi/fullscreen_vert.wgsl"))
+            .process(
+                ShaderRef::module("lumi/fullscreen_vert.wgsl"),
+                &Default::default(),
+            )
             .unwrap();
         let mut fragment = shader_processor
-            .process(ShaderRef::module("lumi/tonemapping_frag.wgsl"))
+            .process(
+                ShaderRef::module("lumi/tonemapping_frag.wgsl"),
+                &Default::default(),
+            )
             .unwrap();
         vertex.rebind_with(&mut fragment).unwrap();
 

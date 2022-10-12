@@ -1,5 +1,7 @@
 mod util;
 
+use std::time::Instant;
+
 use lumi::prelude::*;
 use util::App;
 use winit::event::{DeviceEvent, ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent};
@@ -9,6 +11,8 @@ struct Scene {
     rotate: bool,
     position: Vec3,
     rotation: Vec2,
+    last_frame: Instant,
+    frame_times: Vec<f32>,
 }
 
 impl Scene {
@@ -46,6 +50,8 @@ impl App for Scene {
             rotate: false,
             position: Vec3::ZERO,
             rotation: Vec2::ZERO,
+            last_frame: Instant::now(),
+            frame_times: Vec::new(),
         }
     }
 
@@ -81,11 +87,26 @@ impl App for Scene {
         }
     }
 
-    fn render(&mut self, world: &mut World, _renderer: &mut Renderer, _ctx: &egui::Context) {
+    fn render(&mut self, world: &mut World, _renderer: &mut Renderer, ctx: &egui::Context) {
         let mut camera = world.camera_mut(self.camera);
         camera.view = Mat4::from_translation(self.position)
             * Mat4::from_rotation_y(self.rotation.x)
             * Mat4::from_rotation_x(self.rotation.y);
+
+        egui::Window::new("Information").show(ctx, |ui| {
+            let frame_time = self.frame_times.iter().sum::<f32>() / self.frame_times.len() as f32;
+
+            ui.label(format!("FPS: {:.2}", 1.0 / frame_time));
+        });
+
+        self.frame_times
+            .push(self.last_frame.elapsed().as_secs_f32());
+
+        if self.frame_times.len() > 60 {
+            self.frame_times.remove(0);
+        }
+
+        self.last_frame = Instant::now();
     }
 }
 

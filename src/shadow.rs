@@ -114,7 +114,10 @@ struct DefaultShadowPipeline {
 impl DefaultShadowPipeline {
     pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
         let mut vertex = shader_processor
-            .process(ShaderRef::Default(DefaultShader::ShadowVertex))
+            .process(
+                ShaderRef::Default(DefaultShader::ShadowVertex),
+                &Default::default(),
+            )
             .unwrap();
         vertex.rebind().unwrap();
 

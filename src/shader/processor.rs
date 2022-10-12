@@ -1,7 +1,10 @@
 use std::{
+    borrow::Cow,
     collections::VecDeque,
     path::{Path, PathBuf},
 };
+
+use smallvec::SmallVec;
 
 use crate::{
     shader::{DefaultShader, ShaderError, ShaderRef},
@@ -11,6 +14,9 @@ use crate::{
 use super::{FsShaderIo, Shader, ShaderIo};
 
 const INCLUDE_DIRECTIVE: &str = "#include";
+const IFDEF_DIRECTIVE: &str = "#ifdef";
+const IFNDEF_DIRECTIVE: &str = "#ifndef";
+const ENDIF_DIRECTIVE: &str = "#endif";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ShaderLanguage {
@@ -66,58 +72,147 @@ impl CachedShader {
         }
     }
 
-    fn parse(parent_path: Option<&Path>, mut source: &str) -> Result<Self, ShaderError> {
+    fn strip_comments(mut source: &str) -> Result<String, ShaderError> {
+        let mut result = String::with_capacity(source.len());
+
+        while !source.is_empty() {
+            if let Some(index) = source.find("//") {
+                result.push_str(&source[..index]);
+                source = &source[index + 2..];
+
+                if let Some(index) = source.find('\n') {
+                    source = &source[index + 1..];
+                } else {
+                    break;
+                }
+
+                continue;
+            }
+
+            if let Some(index) = source.find("/*") {
+                result.push_str(&source[..index]);
+                source = &source[index + 2..];
+
+                if let Some(index) = source.find("*/") {
+                    source = &source[index + 2..];
+                } else {
+                    return Err(ShaderError::UnclosedComment);
+                }
+
+                continue;
+            }
+
+            break;
+        }
+
+        result.push_str(source);
+
+        Ok(result)
+    }
+
+    fn find_def_directive(source: &str) -> Option<(usize, bool)> {
+        let a = source.find(IFDEF_DIRECTIVE);
+        let b = source.find(IFNDEF_DIRECTIVE);
+
+        match (a, b) {
+            (Some(a), Some(b)) => Some(if a < b { (a, true) } else { (b, false) }),
+            (Some(a), None) => Some((a, true)),
+            (None, Some(b)) => Some((b, false)),
+            (None, None) => None,
+        }
+    }
+
+    fn def_len(is_def: bool) -> usize {
+        if is_def {
+            IFDEF_DIRECTIVE.len()
+        } else {
+            IFNDEF_DIRECTIVE.len()
+        }
+    }
+
+    fn find_end(mut source: &str) -> Option<usize> {
+        let mut directives = 0;
+
+        loop {
+            let end = source.find(ENDIF_DIRECTIVE)?;
+
+            if let Some((index, is_def)) = Self::find_def_directive(&source[..end]) {
+                directives += 1;
+                source = &source[index + Self::def_len(is_def)..];
+            } else {
+                if directives == 0 {
+                    return Some(end);
+                } else {
+                    directives -= 1;
+                    source = &source[end + ENDIF_DIRECTIVE.len()..];
+                }
+            }
+        }
+    }
+
+    fn parse(
+        parent_path: Option<&Path>,
+        source: &str,
+        defs: &ShaderDefs,
+    ) -> Result<Self, ShaderError> {
+        let source = Self::strip_comments(source)?;
+        let mut source = source.as_str();
+        let mut stripped_source = String::new();
+
+        loop {
+            if let Some((i, is_def)) = Self::find_def_directive(source) {
+                stripped_source.push_str(&source[..i]);
+
+                source = &source[i + Self::def_len(is_def)..];
+                source = source.trim_start();
+
+                let end = source
+                    .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                    .unwrap_or_else(|| source.len());
+
+                let def = &source[..end];
+                source = &source[end..];
+
+                if def.is_empty() {
+                    return Err(ShaderError::InvalidDefine(source.to_string()));
+                }
+
+                let end = Self::find_end(source).ok_or_else(|| ShaderError::UnclosedDirective)?;
+
+                if defs.contains(def) == is_def {
+                    stripped_source.push_str(&source[..end]);
+                }
+
+                source = &source[end + ENDIF_DIRECTIVE.len()..];
+            } else {
+                stripped_source.push_str(source);
+                break;
+            }
+        }
+
+        let mut source = stripped_source.as_str();
         let mut stripped_source = String::new();
 
         let mut includes = HashSet::default();
 
-        while let Some(i) = source.find(INCLUDE_DIRECTIVE) {
-            // skip multi-line comment
-            if let Some(comment) = source.find("/*") {
-                if comment < i {
-                    stripped_source += &source[..comment];
-                    source = &source[comment..];
+        loop {
+            if let Some(i) = source.find(INCLUDE_DIRECTIVE) {
+                stripped_source.push_str(&source[..i]);
 
-                    let comment_end = source[comment..]
-                        .find("*/")
-                        .ok_or_else(|| ShaderError::UnclosedComment)?
-                        + 2;
+                // add include
+                source = &source[i + INCLUDE_DIRECTIVE.len()..];
 
-                    stripped_source += &source[..comment_end];
-                    source = &source[comment_end..];
-
-                    continue;
+                let mut include = Self::parse_shader_ref(&mut source)?;
+                if let Some(parent_path) = &parent_path {
+                    include = include.joined(parent_path);
                 }
+
+                includes.insert(include);
+            } else {
+                stripped_source.push_str(source);
+                break;
             }
-
-            // skip single-line comment
-            if let Some(comment) = source.find("//") {
-                if comment < i {
-                    stripped_source += &source[..comment];
-                    source = &source[comment..];
-
-                    let comment_end = source.find('\n').unwrap_or(source.len()) + 1;
-
-                    stripped_source += &source[..comment_end];
-                    source = &source[comment_end..];
-
-                    continue;
-                }
-            }
-
-            // add include
-            source = &source[i + INCLUDE_DIRECTIVE.len()..];
-
-            let mut include = Self::parse_shader_ref(&mut source)?;
-            if let Some(parent_path) = &parent_path {
-                include = include.joined(parent_path);
-            }
-
-            includes.insert(include);
         }
-
-        stripped_source += source;
-
         Ok(Self {
             source: stripped_source,
             includes,
@@ -125,9 +220,37 @@ impl CachedShader {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ShaderDefs {
+    defs: SmallVec<[Cow<'static, str>; 8]>,
+}
+
+impl ShaderDefs {
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    pub fn set(&mut self, def: impl Into<Cow<'static, str>>) {
+        self.defs.push(def.into())
+    }
+
+    #[inline]
+    pub fn contains(&self, def: &str) -> bool {
+        self.defs.contains(&Cow::Borrowed(def))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ShaderCacheKey {
+    shader_ref: ShaderRef,
+    defs: ShaderDefs,
+}
+
 pub struct ShaderProcessor {
     modules: HashMap<String, String>,
-    cache: HashMap<ShaderRef, CachedShader>,
+    cache: HashMap<ShaderCacheKey, CachedShader>,
     io: Box<dyn ShaderIo>,
 }
 
@@ -177,7 +300,6 @@ impl ShaderProcessor {
         add_module!("standard_material.wgsl", "wgsl/standard_material.wgsl");
         add_module!("integrated_brdf.wgsl", "wgsl/integrated_brdf.wgsl");
         add_module!("pbr_types.wgsl", "wgsl/pbr_types.wgsl");
-        add_module!("pbr_pixel.wgsl", "wgsl/pbr_pixel.wgsl");
         add_module!("pbr.wgsl", "wgsl/pbr.wgsl");
         add_module!("ssr.wgsl", "wgsl/ssr.wgsl");
         add_module!("environment.wgsl", "wgsl/environment.wgsl");
@@ -230,22 +352,26 @@ impl ShaderProcessor {
 
     fn get_cached_shader(
         &mut self,
-        shader_ref: &ShaderRef,
+        key: &ShaderCacheKey,
         parent_path: Option<&Path>,
         language: ShaderLanguage,
     ) -> Result<&CachedShader, ShaderError> {
-        if self.cache.contains_key(shader_ref) {
-            Ok(self.cache.get(shader_ref).unwrap())
+        if self.cache.contains_key(key) {
+            Ok(self.cache.get(key).unwrap())
         } else {
-            let source = self.read_shader_source(shader_ref, language)?;
-            let shader = CachedShader::parse(parent_path, &source)?;
-            self.cache.insert(shader_ref.clone(), shader);
+            let source = self.read_shader_source(&key.shader_ref, language)?;
+            let shader = CachedShader::parse(parent_path, &source, &key.defs)?;
+            self.cache.insert(key.clone(), shader);
 
-            Ok(self.cache.get(shader_ref).unwrap())
+            Ok(self.cache.get(key).unwrap())
         }
     }
 
-    pub fn process(&mut self, shader_ref: ShaderRef) -> Result<Shader, ShaderError> {
+    pub fn process(
+        &mut self,
+        shader_ref: ShaderRef,
+        defs: &ShaderDefs,
+    ) -> Result<Shader, ShaderError> {
         let mut processed = String::new();
 
         let shader_language = shader_ref.language()?;
@@ -263,11 +389,13 @@ impl ShaderProcessor {
                 return Err(ShaderError::CircularInclude(shader_ref));
             }
 
-            let shader = self.get_cached_shader(
-                &shader_ref,
-                shader_ref.parent_path().as_deref(),
-                shader_language,
-            )?;
+            let key = ShaderCacheKey {
+                shader_ref: shader_ref.clone(),
+                defs: defs.clone(),
+            };
+
+            let shader =
+                self.get_cached_shader(&key, shader_ref.parent_path().as_deref(), shader_language)?;
 
             let mut can_include = true;
             for include in shader.includes.iter() {

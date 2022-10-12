@@ -1,6 +1,5 @@
 #include <lumi/pbr_light.wgsl>
 #include <lumi/pbr_types.wgsl>
-#include <lumi/pbr_pixel.wgsl>
 #include <lumi/camera.wgsl>
 #include <lumi/ssr.wgsl>
 
@@ -40,16 +39,17 @@ fn env_indirect(perceptual_roughness: f32, r: vec3<f32>) -> vec3<f32> {
 	return textureSampleLevel(environment_specular, environment_sampler, r, lod).rgb;
 }
 
+#ifdef SUBSURFACE
 fn env_subsurface(
 	pixel: PbrPixel, 
-	geometry: PbrGeometry,
 	irradiance: vec3<f32>,
 ) -> vec3<f32> {
-	let view_dependent = prefiltered_radiance_offset(-geometry.v, pixel.roughness, (1.0 + pixel.thickness) / 5.0);
+	let view_dependent = prefiltered_radiance_offset(-pixel.v, pixel.roughness, (1.0 + pixel.thickness) / 5.0);
 	let attenuation = (1.0 - pixel.thickness) / (2.0 * PI);
 
 	return pixel.subsurface_color * (irradiance + view_dependent) * attenuation;
 }
+#endif
 
 struct Refraction {
 	position: vec3<f32>,
@@ -67,30 +67,31 @@ fn refract(r: vec3<f32>, n: vec3<f32>, ior: f32) -> vec3<f32> {
 	}
 }
 
+#ifdef TRANSMISSION
 fn refraction_solid_sphere(
 	pixel: PbrPixel,
-	geometry: PbrGeometry,
 	r: vec3<f32>,
 ) -> Refraction {
 	var ray: Refraction;
 
-	let r = refract(r, geometry.n, pixel.eta_ir);	
-	let nor = dot(geometry.n, r);
+	let r = refract(r, pixel.n, pixel.eta_ir);	
+	let nor = dot(pixel.n, r);
 	let d = pixel.thickness * -nor;
-	ray.position = geometry.position + r * d;
+	ray.position = pixel.position + r * d;
 	ray.d = d;
-	let n = normalize(nor * r - geometry.n * 0.5);
+	let n = normalize(nor * r - pixel.n * 0.5);
 	ray.direction = refract(r, n, pixel.eta_ri);
 
 	return ray;
 }
+#endif
 
+#ifdef TRANSMISSION
 fn env_refractions(
 	pixel: PbrPixel, 
-	geometry: PbrGeometry,
 	e: vec3<f32>,
 ) -> vec3<f32> {
-	let ray = refraction_solid_sphere(pixel, geometry, -geometry.v);
+	let ray = refraction_solid_sphere(pixel, -pixel.v);
 	let t = min(vec3<f32>(1.0), exp(-pixel.absorption * ray.d));
 
 	let perceptual_roughness = mix(
@@ -113,43 +114,41 @@ fn env_refractions(
 
 	return ft;
 }
+#endif
 
-fn environment(
-	pixel: PbrPixel,
-	geometry: PbrGeometry,
-) -> vec3<f32> {	
+fn environment(pixel: PbrPixel) -> vec3<f32> {	
 	let e = pixel.f0 * pixel.dfg.x + pixel.f0 * pixel.dfg.y;
 
-	let diffuse_irradiance = env_diffuse(pixel.diffuse_color, geometry.n);
+	let diffuse_irradiance = env_diffuse(pixel.diffuse_color, pixel.n);
 	var diffuse = diffuse_irradiance;
-	let r = mix(geometry.r, geometry.n, pixel.roughness * pixel.roughness);
+	let r = mix(pixel.r, pixel.n, pixel.roughness * pixel.roughness);
 	var specular = env_indirect(pixel.roughness, r);
 
 	diffuse *= 1.0 - e;
 	specular *= e;
 
-	if has_subsurface(pixel) {
-		diffuse += env_subsurface(pixel, geometry, diffuse_irradiance);
-	}
+#ifdef SUBSURFACE
+	diffuse += env_subsurface(pixel, diffuse_irradiance);
+#endif
 
-	if has_clearcoat(pixel) {
-		let fc = f_schlick(0.04, 1.0, geometry.clearcoat_nov) * pixel.clearcoat;
-		let attenuation = 1.0 - fc;
+#ifdef CLEARCOAT
+	let fc = f_schlick(0.04, 1.0, pixel.clearcoat_nov) * pixel.clearcoat;
+	let attenuation = 1.0 - fc;
 
-		diffuse *= attenuation;
-		specular *= attenuation;
+	diffuse *= attenuation;
+	specular *= attenuation;
 
-		specular += env_indirect(pixel.clearcoat_perceptual_roughness, geometry.clearcoat_r) * fc;
-	}
+	specular += env_indirect(pixel.clearcoat_perceptual_roughness, pixel.clearcoat_r) * fc;
+#endif
 
 	diffuse *= ambient_light.color * camera.exposure;
 	specular *= ambient_light.color * camera.exposure;
 
-	if has_refractions(pixel) {
-		let ft = env_refractions(pixel, geometry, e) * pixel.transmission;
-		diffuse *= (1.0 - pixel.transmission);
-		specular += ft;
-	}	
+#ifdef TRANSMISSION
+	let ft = env_refractions(pixel, e) * pixel.transmission;
+	diffuse *= (1.0 - pixel.transmission);
+	specular += ft;
+#endif
 
 	return diffuse + specular;
 }

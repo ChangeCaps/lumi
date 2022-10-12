@@ -42,23 +42,35 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 		mesh.w_normal
 	);
 
-	pbr.thickness = standard_material.thickness;
-	pbr.subsurface_power = standard_material.subsurface_power;
-	pbr.subsurface_color = standard_material.subsurface_color;
 	pbr.base_color = base_color_texture * standard_material.base_color;
 	pbr.alpha_cutoff = standard_material.alpha_cutoff;
 	pbr.metallic = standard_material.metallic * metallic_roughness_texture.b;
 	pbr.roughness = standard_material.roughness * metallic_roughness_texture.g;
-	pbr.reflectance = standard_material.reflectance;
+	pbr.reflectance = standard_material.reflectance;	
+	pbr.emissive = emissive_map.rgb * standard_material.emissive;
+
+	pbr.normal = normalize(tbn * (normal_map * 2.0 - 1.0));
+
+#ifdef CLEARCOAT
 	pbr.clearcoat = standard_material.clearcoat;
 	pbr.clearcoat_roughness = standard_material.clearcoat_roughness;
-	pbr.emissive = emissive_map.rgb * standard_material.emissive;	
+	pbr.clearcoat_normal = normalize(tbn * (clearcoat_normal_map * 2.0 - 1.0));
+#endif
+
+#ifdef THICKNESS
+	pbr.thickness = standard_material.thickness;
+#endif
+
+#ifdef SUBSURFACE
+	pbr.subsurface_power = standard_material.subsurface_power;
+	pbr.subsurface_color = standard_material.subsurface_color;
+#endif
+
+#ifdef TRANSMISSION
 	pbr.transmission = standard_material.transmission;
 	pbr.ior = standard_material.ior;
 	pbr.absorption = standard_material.absorption;
-
-	pbr.normal = normalize(tbn * (normal_map * 2.0 - 1.0));
-	pbr.clearcoat_normal = normalize(tbn * (clearcoat_normal_map * 2.0 - 1.0));
+#endif
 
 	return pbr_light(pbr);
 }

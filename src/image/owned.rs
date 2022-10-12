@@ -1,6 +1,8 @@
 use std::{num::NonZeroU32, path::Path};
 
-use wgpu::{Extent3d, SamplerDescriptor, TextureDimension, TextureFormat, TextureUsages};
+use wgpu::{
+    Extent3d, FilterMode, SamplerDescriptor, TextureDimension, TextureFormat, TextureUsages,
+};
 
 use crate::{
     bind::{DefaultSampler, DefaultTexture, SamplerBinding, SharedBindingResource, TextureBinding},
@@ -25,7 +27,11 @@ impl Default for ImageData {
             height: 0,
             data: Vec::new(),
             format: TextureFormat::Rgba8UnormSrgb,
-            sampler: SamplerDescriptor::default(),
+            sampler: SamplerDescriptor {
+                mag_filter: FilterMode::Linear,
+                min_filter: FilterMode::Linear,
+                ..Default::default()
+            },
         }
     }
 }

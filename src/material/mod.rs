@@ -28,7 +28,7 @@ use crate::{
     renderable::Renderable,
     renderer::{RenderSettings, RenderViewPhase, ViewPhaseContext},
     resources::Resources,
-    shader::{DefaultShader, Shader, ShaderProcessor, ShaderRef},
+    shader::{DefaultShader, Shader, ShaderDefs, ShaderProcessor, ShaderRef},
     shadow::{ShadowFunctions, ShadowReceiverBindings},
     util::HashMap,
     SharedBindGroup, SharedBuffer, SharedDevice, SharedRenderPipeline, SharedTextureView,
@@ -58,6 +58,10 @@ pub trait Material: Bind + 'static {
 
     fn fragment_shader() -> ShaderRef {
         ShaderRef::Default(DefaultShader::Fragment)
+    }
+
+    fn shader_defs(&self) -> ShaderDefs {
+        ShaderDefs::default()
     }
 
     fn specialize(pipeline: &mut MaterialPipeline) {
@@ -115,6 +119,67 @@ pub struct MeshNodePipeline {
 }
 
 impl MeshNodePipeline {
+    pub fn new<T: Material>(
+        device: &Device,
+        shader_defs: &ShaderDefs,
+        sample_count: u32,
+        shader_processor: &mut ShaderProcessor,
+    ) -> Self {
+        let vertex = shader_processor
+            .process(T::vertex_shader(), shader_defs)
+            .unwrap();
+        let fragment = shader_processor
+            .process(T::fragment_shader(), shader_defs)
+            .unwrap();
+
+        let mut material_pipeline = MaterialPipeline {
+            vertex_shader: vertex,
+            fragment_shader: fragment,
+            vertices: Vec::new(),
+        };
+
+        T::specialize(&mut material_pipeline);
+
+        material_pipeline
+            .vertex_shader
+            .rebind_with(&mut material_pipeline.fragment_shader)
+            .unwrap();
+
+        let layout = BindingsLayout::new()
+            .with_shader(&material_pipeline.vertex_shader)
+            .with_shader(&material_pipeline.fragment_shader)
+            .bind::<MeshBindings>()
+            .bind::<LightBindings>()
+            .bind::<ShadowReceiverBindings>()
+            .bind::<SsrBindings>()
+            .bind::<EnvironmentBindings>()
+            .bind::<T>();
+
+        let bind_group_layouts = layout.create_bind_group_layouts(device);
+        let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &bind_group_layouts,
+            push_constant_ranges: &[],
+        });
+
+        let render_pipeline = MeshNodePipeline::create_render_pipeline(
+            device,
+            &pipeline_layout,
+            &mut material_pipeline,
+            sample_count,
+        );
+
+        MeshNodePipeline {
+            bindings_layout: layout,
+            material_pipeline,
+            pipeline_layout,
+            render_pipeline,
+            sample_count,
+        }
+    }
+
     pub fn create_render_pipeline(
         device: &Device,
         pipeline_layout: &PipelineLayout,
@@ -249,7 +314,7 @@ impl<T> MeshNode<T> {
 
 #[derive(Default)]
 struct MaterialState {
-    bindings: HashMap<CameraId, Vec<Bindings>>,
+    bindings: HashMap<CameraId, Vec<(Bindings, ShaderDefs)>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -362,23 +427,51 @@ impl MaterialFunctions {
         Self {
             prepare: |phase, context, ssr, world, resources| {
                 for (node_id, node) in world.iter_nodes::<MeshNode<T>>() {
-                    let pipeline = resources
-                        .get_key_mut::<MeshNodePipeline>(&TypeId::of::<T>())
-                        .unwrap();
                     let state = phase.node_state.entry(node_id).or_default();
 
                     let bindings = state.bindings.entry(context.view.camera).or_default();
-                    bindings.resize_with(node.primitives.len(), || {
-                        pipeline.bindings_layout.create_bindings(&context.device)
-                    });
 
-                    for (primitive, bindings) in node.primitives.iter().zip(bindings.iter_mut()) {
+                    for (i, primitive) in node.primitives.iter().enumerate() {
+                        let key = (TypeId::of::<T>(), primitive.material.shader_defs());
+
+                        if !resources.contains_key::<MeshNodePipeline>(&key) {
+                            let sample_count =
+                                resources.get::<RenderSettings>().unwrap().sample_count;
+                            let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
+
+                            let pipeline = MeshNodePipeline::new::<T>(
+                                context.device,
+                                &key.1,
+                                sample_count,
+                                shader_processor,
+                            );
+
+                            resources.insert_key(key.clone(), pipeline);
+                        }
+
+                        let pipeline = resources.get_key::<MeshNodePipeline>(&key).unwrap();
+
+                        if bindings.len() <= i {
+                            bindings.push((
+                                pipeline.bindings_layout.create_bindings(context.device),
+                                key.1,
+                            ));
+                        } else {
+                            if bindings[0].1 != key.1 {
+                                bindings[i] = (
+                                    pipeline.bindings_layout.create_bindings(context.device),
+                                    key.1,
+                                );
+                            }
+                        }
+
                         if let Some(aabb) = resources.get_key::<Aabb>(&primitive.mesh.id()) {
                             if !context.view.intersects(aabb, node.transform) {
                                 continue;
                             }
                         }
 
+                        let bindings = &mut bindings[i].0;
                         bindings.bind(&context.device, &context.queue, &primitive.material);
                     }
 
@@ -395,7 +488,9 @@ impl MaterialFunctions {
                         ssr_texture: ssr.clone(),
                     };
 
-                    for (primitive, bindings) in node.primitives.iter().zip(bindings.iter_mut()) {
+                    for (primitive, (bindings, _)) in
+                        node.primitives.iter().zip(bindings.iter_mut())
+                    {
                         if let Some(aabb) = resources.get_key::<Aabb>(&primitive.mesh.id()) {
                             if !context.view.intersects(aabb, node.transform) {
                                 continue;
@@ -416,16 +511,18 @@ impl MaterialFunctions {
                 }
             },
             render: |phase, context, world, resources, draws| {
-                let pipeline = resources
-                    .get_key::<MeshNodePipeline>(&TypeId::of::<T>())
-                    .unwrap();
-
                 for (node_id, node) in world.iter_nodes::<MeshNode<T>>() {
                     let state = phase.node_state.get(&node_id).unwrap();
 
                     let bindings = state.bindings.get(&context.view.camera).unwrap();
 
-                    for (primitive, bindings) in node.primitives.iter().zip(bindings.iter()) {
+                    for (primitive, (bindings, _)) in node.primitives.iter().zip(bindings.iter()) {
+                        let shader_defs = primitive.material.shader_defs();
+
+                        let pipeline = resources
+                            .get_key::<MeshNodePipeline>(&(TypeId::of::<T>(), shader_defs))
+                            .unwrap();
+
                         if let Some(aabb) = resources.get_key::<Aabb>(&primitive.mesh.id()) {
                             if !context.view.intersects(aabb, node.transform) {
                                 continue;
@@ -589,59 +686,6 @@ impl RenderViewPhase for MaterialPhase {
 
 impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
     fn register(device: &Device, _queue: &Queue, resources: &mut Resources) {
-        let shader_processor = resources.get_or_default::<ShaderProcessor>();
-
-        let vertex = shader_processor.process(T::vertex_shader()).unwrap();
-        let fragment = shader_processor.process(T::fragment_shader()).unwrap();
-
-        let mut material_pipeline = MaterialPipeline {
-            vertex_shader: vertex,
-            fragment_shader: fragment,
-            vertices: Vec::new(),
-        };
-
-        T::specialize(&mut material_pipeline);
-
-        material_pipeline
-            .vertex_shader
-            .rebind_with(&mut material_pipeline.fragment_shader)
-            .unwrap();
-
-        let layout = BindingsLayout::new()
-            .with_shader(&material_pipeline.vertex_shader)
-            .with_shader(&material_pipeline.fragment_shader)
-            .bind::<MeshBindings>()
-            .bind::<LightBindings>()
-            .bind::<ShadowReceiverBindings>()
-            .bind::<SsrBindings>()
-            .bind::<EnvironmentBindings>()
-            .bind::<T>();
-
-        let bind_group_layouts = layout.create_bind_group_layouts(device);
-        let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &bind_group_layouts,
-            push_constant_ranges: &[],
-        });
-
-        let sample_count = resources.get::<RenderSettings>().unwrap().sample_count;
-        let render_pipeline = MeshNodePipeline::create_render_pipeline(
-            device,
-            &pipeline_layout,
-            &mut material_pipeline,
-            sample_count,
-        );
-
-        let pipeline = MeshNodePipeline {
-            bindings_layout: layout,
-            material_pipeline,
-            pipeline_layout,
-            render_pipeline,
-            sample_count,
-        };
-
         let prepare_mesh_fn = PrepareMeshFn::new(|device, world, resources| {
             for node in world.nodes::<Self>() {
                 for primitive in node.primitives.iter() {
@@ -669,7 +713,13 @@ impl<T: Material + Send + Sync> Renderable for MeshNode<T> {
             }
         });
 
-        resources.insert_key(TypeId::of::<T>(), pipeline);
+        let sample_count = resources.get::<RenderSettings>().unwrap().sample_count;
+        let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
+        let shader_defs = ShaderDefs::default();
+        let pipeline =
+            MeshNodePipeline::new::<T>(device, &shader_defs, sample_count, shader_processor);
+
+        resources.insert_key((TypeId::of::<T>(), shader_defs), pipeline);
         resources.insert_key(TypeId::of::<T>(), MaterialFunctions::new::<T>());
         resources.insert_key(TypeId::of::<T>(), prepare_mesh_fn);
         resources.insert_key(TypeId::of::<T>(), ShadowFunctions::new_mesh_node::<T>());

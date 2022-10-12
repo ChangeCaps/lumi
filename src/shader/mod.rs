@@ -183,6 +183,10 @@ pub enum ShaderError {
     InvalidInclude(String),
     #[error("Unclosed comment")]
     UnclosedComment,
+    #[error("Unclosed directive")]
+    UnclosedDirective,
+    #[error("Invalid define '{0}'")]
+    InvalidDefine(String),
     #[error("Invalid module {0:?}")]
     InvalidModule(String),
     #[error("Circular include {0:?}")]

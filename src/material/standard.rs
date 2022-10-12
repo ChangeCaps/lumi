@@ -6,6 +6,7 @@ use crate::{
     image::{Image, NormalMap},
     material::Material,
     prelude::ShaderRef,
+    shader::ShaderDefs,
 };
 
 #[derive(Clone, Debug, Bind)]
@@ -26,9 +27,6 @@ pub struct StandardMaterial {
     #[texture]
     #[sampler(name = "emissive_map_sampler")]
     pub emissive_map: Option<Image>,
-    pub thickness: f32,
-    pub subsurface_power: f32,
-    pub subsurface_color: Vec3,
     pub base_color: Vec4,
     pub alpha_cutoff: f32,
     pub metallic: f32,
@@ -37,7 +35,11 @@ pub struct StandardMaterial {
     pub clearcoat_roughness: f32,
     pub reflectance: f32,
     pub emissive: Vec3,
+    pub emissive_factor: f32,
     pub emissive_exposure_compensation: f32,
+    pub thickness: f32,
+    pub subsurface_power: f32,
+    pub subsurface_color: Vec3,
     pub transmission: f32,
     pub ior: f32,
     pub absorption: Vec3,
@@ -51,9 +53,6 @@ impl Default for StandardMaterial {
             normal_map: None,
             clearcoat_normal_map: None,
             emissive_map: None,
-            thickness: 1.0,
-            subsurface_power: 0.0,
-            subsurface_color: Vec3::new(1.0, 1.0, 1.0),
             base_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             alpha_cutoff: 0.01,
             metallic: 0.01,
@@ -62,7 +61,11 @@ impl Default for StandardMaterial {
             clearcoat_roughness: 0.0,
             reflectance: 0.5,
             emissive: Vec3::ZERO,
+            emissive_factor: 8.0,
             emissive_exposure_compensation: 0.0,
+            thickness: 1.0,
+            subsurface_power: 0.0,
+            subsurface_color: Vec3::new(0.0, 0.0, 0.0),
             transmission: 0.0,
             ior: 1.5,
             absorption: Vec3::new(0.0, 0.0, 0.0),
@@ -72,9 +75,6 @@ impl Default for StandardMaterial {
 
 #[derive(Clone, Copy, ShaderType)]
 pub struct RawStandardMaterial {
-    pub thickness: f32,
-    pub subsurface_power: f32,
-    pub subsurface_color: Vec3,
     pub base_color: Vec4,
     pub alpha_cutoff: f32,
     pub metallic: f32,
@@ -83,7 +83,11 @@ pub struct RawStandardMaterial {
     pub clearcoat_roughness: f32,
     pub reflectance: f32,
     pub emissive: Vec3,
+    pub emissive_factor: f32,
     pub emissive_exposure_compensation: f32,
+    pub thickness: f32,
+    pub subsurface_power: f32,
+    pub subsurface_color: Vec3,
     pub transmission: f32,
     pub ior: f32,
     pub absorption: Vec3,
@@ -92,9 +96,6 @@ pub struct RawStandardMaterial {
 impl From<&StandardMaterial> for RawStandardMaterial {
     fn from(material: &StandardMaterial) -> Self {
         Self {
-            thickness: material.thickness,
-            subsurface_power: material.subsurface_power,
-            subsurface_color: material.subsurface_color,
             base_color: material.base_color,
             alpha_cutoff: material.alpha_cutoff,
             metallic: material.metallic,
@@ -103,7 +104,11 @@ impl From<&StandardMaterial> for RawStandardMaterial {
             clearcoat_roughness: material.clearcoat_roughness,
             reflectance: material.reflectance,
             emissive: material.emissive,
+            emissive_factor: material.emissive_factor,
             emissive_exposure_compensation: material.emissive_exposure_compensation,
+            thickness: material.thickness,
+            subsurface_power: material.subsurface_power,
+            subsurface_color: material.subsurface_color,
             transmission: material.transmission,
             ior: material.ior,
             absorption: material.absorption,
@@ -114,6 +119,24 @@ impl From<&StandardMaterial> for RawStandardMaterial {
 impl Material for StandardMaterial {
     fn fragment_shader() -> ShaderRef {
         ShaderRef::module("lumi/standard_frag.wgsl")
+    }
+
+    fn shader_defs(&self) -> ShaderDefs {
+        let mut shader_defs = ShaderDefs::default();
+
+        if self.clearcoat > 0.0 {
+            shader_defs.set("CLEARCOAT");
+        }
+
+        if self.transmission > 0.0 {
+            shader_defs.set("TRANSMISSION");
+        }
+
+        if self.transmission > 0.0 {
+            shader_defs.set("THICKNESS");
+        }
+
+        shader_defs
     }
 
     fn is_translucent(&self) -> bool {

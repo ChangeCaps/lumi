@@ -2,7 +2,6 @@
 #include <lumi/pbr_light.wgsl>
 #include <lumi/environment.wgsl>
 #include <lumi/pbr_types.wgsl>
-#include <lumi/pbr_pixel.wgsl>
 #include <lumi/camera.wgsl>
 
 fn pbr_light(pbr: Pbr) -> vec4<f32> {
@@ -10,14 +9,15 @@ fn pbr_light(pbr: Pbr) -> vec4<f32> {
 		discard;
 	}
 
-	let geometry = compute_geometry(pbr);
-	let pixel = get_pbr_pixel(pbr, geometry);
+	let pixel = get_pbr_pixel(pbr);
 
-	var color = environment(pixel, geometry);
-	color += pbr_lights(pixel, geometry);
+	var color = pbr_lights(pixel);
 
 	let emissive_luminance = pow(2.0, camera.ev100 + pbr.emissive_exposure_compensation - 3.0);
-	color += pbr.emissive * emissive_luminance * camera.exposure * pbr.base_color.a;
+	color += pbr.emissive * emissive_luminance * pbr.base_color.a;
+
+	color *= camera.exposure;
+	color += environment(pixel);
 
 	return vec4<f32>(color, pbr.base_color.a);
 }

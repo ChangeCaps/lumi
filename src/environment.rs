@@ -262,10 +262,10 @@ impl Sky {
         sample_count: u32,
     ) -> Self {
         let mut vertex = shader_processor
-            .process(ShaderRef::module("lumi/sky_vert.wgsl"))
+            .process(ShaderRef::module("lumi/sky_vert.wgsl"), &Default::default())
             .unwrap();
         let mut fragment = shader_processor
-            .process(ShaderRef::Default(DefaultShader::Sky))
+            .process(ShaderRef::Default(DefaultShader::Sky), &Default::default())
             .unwrap();
         vertex.rebind_with(&mut fragment).unwrap();
         vertex.compile(device).unwrap();
