@@ -1,9 +1,8 @@
 mod util;
 
 use lumi::prelude::*;
+use util::App;
 
-fn main() {
-    let mesh = MeshNode::open_gltf("untitled.gltf").unwrap();
+struct GltfViewer {}
 
-    println!("{:#?}", mesh.primitives[0].mesh);
-}
+fn main() {}
