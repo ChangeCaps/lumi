@@ -74,7 +74,7 @@ impl ShaderDefs {
     }
 
     #[inline]
-    pub fn set(&mut self, def: impl Into<ShaderDefHash>) {
+    pub fn push(&mut self, def: impl Into<ShaderDefHash>) {
         self.defs.push(def.into())
     }
 

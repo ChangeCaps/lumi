@@ -4,7 +4,7 @@ use glam::{Mat4, Vec3};
 use crate::{
     aabb::{Frustum, RenderFrustum},
     bind::Bind,
-    buffer::StorageBuffer,
+    buffer::{StorageBuffer, UniformBuffer},
     prelude::World,
     renderer::{PhaseContext, RenderPhase},
     resources::Resources,
@@ -303,13 +303,13 @@ impl Light {
 #[derive(Default, Bind)]
 pub struct LightBindings {
     #[uniform]
-    pub ambient_light: RawAmbientLight,
+    pub ambient_light: UniformBuffer<RawAmbientLight>,
     #[uniform]
-    pub point_light_count: u32,
+    pub point_light_count: UniformBuffer<u32>,
     #[storage_buffer]
     pub point_lights: StorageBuffer<RawPointLight>,
     #[uniform]
-    pub directional_light_count: u32,
+    pub directional_light_count: UniformBuffer<u32>,
     #[storage_buffer]
     pub directional_lights: StorageBuffer<RawDirectionalLight>,
 }
@@ -321,8 +321,8 @@ impl LightBindings {
     }
 
     pub fn update_count(&mut self) {
-        self.point_light_count = self.point_lights.len() as u32;
-        self.directional_light_count = self.directional_lights.len() as u32;
+        *self.point_light_count = self.point_lights.len() as u32;
+        *self.directional_light_count = self.directional_lights.len() as u32;
     }
 }
 
@@ -337,7 +337,7 @@ impl RenderPhase for PrepareLightsPhase {
         let light_bindings = resources.get_or_insert_with(|| LightBindings::default());
         light_bindings.clear();
 
-        light_bindings.ambient_light = world.ambient().raw();
+        *light_bindings.ambient_light = world.ambient().raw();
 
         let mut cascade_count = 0;
         for (id, light) in world.iter_lights() {

@@ -125,35 +125,35 @@ impl Material for StandardMaterial {
         let mut shader_defs = ShaderDefs::default();
 
         if self.base_color_texture.is_some() {
-            shader_defs.set("BASE_COLOR_TEXTURE");
+            shader_defs.push("BASE_COLOR_TEXTURE");
         }
 
         if self.metallic_roughness_texture.is_some() {
-            shader_defs.set("METALLIC_ROUGHNESS_TEXTURE");
+            shader_defs.push("METALLIC_ROUGHNESS_TEXTURE");
         }
 
         if self.emissive_map.is_some() {
-            shader_defs.set("EMISSIVE_MAP");
+            shader_defs.push("EMISSIVE_MAP");
         }
 
         if self.normal_map.is_some() {
-            shader_defs.set("NORMAL_MAP");
+            shader_defs.push("NORMAL_MAP");
         }
 
         if self.clearcoat_normal_map.is_some() {
-            shader_defs.set("CLEARCOAT_NORMAL_MAP");
+            shader_defs.push("CLEARCOAT_NORMAL_MAP");
         }
 
         if self.clearcoat > 0.0 {
-            shader_defs.set("CLEARCOAT");
+            shader_defs.push("CLEARCOAT");
         }
 
         if self.transmission > 0.0 {
-            shader_defs.set("TRANSMISSION");
+            shader_defs.push("TRANSMISSION");
         }
 
         if self.transmission > 0.0 {
-            shader_defs.set("THICKNESS");
+            shader_defs.push("THICKNESS");
         }
 
         shader_defs

@@ -478,10 +478,10 @@ impl MaterialFunctions {
                         let pipeline = pipelines.get(&hash).unwrap();
 
                         if bindings.len() <= i {
-                            bindings.push((
-                                pipeline.bindings_layout.create_bindings(context.device),
-                                hash,
-                            ));
+                            let mut _bindings =
+                                pipeline.bindings_layout.create_bindings(context.device);
+
+                            bindings.push((_bindings, hash));
                         } else {
                             if bindings[i].1 != hash {
                                 bindings[i] = (

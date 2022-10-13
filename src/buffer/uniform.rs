@@ -73,6 +73,12 @@ where
     }
 }
 
+impl<T: Default> Default for UniformBuffer<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
 impl<T> Deref for UniformBuffer<T> {
     type Target = T;
 
