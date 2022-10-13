@@ -8,7 +8,7 @@ struct Unlit;
 
 impl App for Unlit {
     fn init(world: &mut World, renderer: &mut Renderer) -> Self {
-        renderer.settings_mut().sample_count = 4;
+        //renderer.settings_mut().sample_count = 4;
 
         world.add(MeshNode::new(
             UnlitMaterial::new(Vec3::new(1.0, 0.0, 0.0)),

@@ -1,3 +1,4 @@
+mod defines;
 mod io;
 mod processor;
 
@@ -11,6 +12,7 @@ use wgpu::{ShaderModule, ShaderSource};
 
 use crate::{util::HashMap, Device};
 
+pub use defines::*;
 pub use io::*;
 pub use processor::*;
 

@@ -10,6 +10,8 @@ use crate::{Device, SharedDevice, SharedTexture, SharedTextureView};
 pub struct FrameBuffer {
     pub hdr: SharedTexture,
     pub hdr_view: SharedTextureView,
+    pub hdr_msaa: Option<SharedTexture>,
+    pub hdr_msaa_view: Option<SharedTextureView>,
     pub offscreen_hdr: SharedTexture,
     pub offscreen_hdr_view: SharedTextureView,
     pub depth: SharedTexture,
@@ -17,7 +19,7 @@ pub struct FrameBuffer {
 }
 
 impl FrameBuffer {
-    pub fn new(device: &Device, width: u32, height: u32) -> Self {
+    pub fn new(device: &Device, width: u32, height: u32, sample_count: u32) -> Self {
         let hdr = device.create_shared_texture(&TextureDescriptor {
             label: Some("Lumi HDR Target"),
             size: Extent3d {
@@ -33,6 +35,30 @@ impl FrameBuffer {
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC,
         });
+
+        let (hdr_msaa, hdr_msaa_view) = if sample_count > 1 {
+            let hdr_msaa = device.create_shared_texture(&TextureDescriptor {
+                label: Some("Lumi HDR MSAA Target"),
+                size: Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba16Float,
+                usage: TextureUsages::RENDER_ATTACHMENT
+                    | TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::COPY_SRC,
+            });
+
+            let hdr_msaa_view = hdr_msaa.create_view(&Default::default());
+
+            (Some(hdr_msaa), Some(hdr_msaa_view))
+        } else {
+            (None, None)
+        };
 
         let offscreen_hdr = device.create_shared_texture(&TextureDescriptor {
             label: Some("Lumi Offscreen HDR Target"),
@@ -59,7 +85,7 @@ impl FrameBuffer {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count,
             dimension: TextureDimension::D2,
             format: TextureFormat::Depth32Float,
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -72,6 +98,8 @@ impl FrameBuffer {
         Self {
             hdr,
             hdr_view,
+            hdr_msaa,
+            hdr_msaa_view,
             offscreen_hdr,
             offscreen_hdr_view,
             depth,
@@ -87,6 +115,10 @@ impl FrameBuffer {
         self.hdr.size().height
     }
 
+    pub fn sample_count(&self) -> u32 {
+        self.hdr_msaa.as_ref().map_or(1, |t| t.sample_count())
+    }
+
     pub fn size(&self) -> Extent3d {
         self.hdr.size()
     }
@@ -95,9 +127,9 @@ impl FrameBuffer {
         self.width() as f32 / self.height() as f32
     }
 
-    pub fn resize(&mut self, device: &Device, width: u32, height: u32) {
-        if self.width() != width || self.height() != height {
-            *self = Self::new(device, width, height);
+    pub fn resize(&mut self, device: &Device, width: u32, height: u32, sample_count: u32) {
+        if self.width() != width || self.height() != height || self.sample_count() != sample_count {
+            *self = Self::new(device, width, height, sample_count);
         }
     }
 
@@ -136,11 +168,17 @@ impl FrameBuffer {
             LoadOp::Clear(1.0)
         };
 
+        let (view, resolve_target) = if let Some(msaa) = &self.hdr_msaa_view {
+            (msaa, Some(self.hdr_view.view()))
+        } else {
+            (&self.hdr_view, None)
+        };
+
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Lumi HDR Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &self.hdr_view,
-                resolve_target: None,
+                view,
+                resolve_target,
                 ops: Operations {
                     load: color_load,
                     store: true,

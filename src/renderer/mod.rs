@@ -31,24 +31,26 @@ pub use view_phase::*;
 
 pub struct RenderSettings {
     pub clear_color: [f32; 4],
-    pub aspect_ratio: Option<f32>,
+    pub sample_count: u32,
     pub render_sky: bool,
     pub bloom_enabled: bool,
     pub bloom_threshold: f32,
     pub bloom_knee: f32,
     pub bloom_scale: f32,
+    pub fxaa_enabled: bool,
 }
 
 impl Default for RenderSettings {
     fn default() -> Self {
         Self {
             clear_color: [0.0, 0.0, 0.0, 1.0],
-            aspect_ratio: None,
+            sample_count: 4,
             render_sky: false,
             bloom_enabled: true,
             bloom_threshold: 3.5,
             bloom_knee: 1.0,
             bloom_scale: 1.0,
+            fxaa_enabled: false,
         }
     }
 }
@@ -70,10 +72,11 @@ impl PreparedCamera {
         bloom_pipeline: &BloomPipeline,
         camera: &Camera,
         target: &RenderTarget<'_>,
+        sample_count: u32,
     ) -> Self {
         let width = camera.target.get_width(target.width);
         let height = camera.target.get_height(target.height);
-        let frame_buffer = FrameBuffer::new(device, width, height);
+        let frame_buffer = FrameBuffer::new(device, width, height, sample_count);
         Self {
             frame_buffer,
             bloom: Bloom::new(device, bloom_pipeline, width, height),
@@ -86,11 +89,13 @@ impl PreparedCamera {
         bloom_pipeline: &BloomPipeline,
         camera: &Camera,
         target: &RenderTarget<'_>,
+        sample_count: u32,
     ) {
         let width = camera.target.get_width(target.width);
         let height = camera.target.get_height(target.height);
 
-        self.frame_buffer.resize(device, width, height);
+        self.frame_buffer
+            .resize(device, width, height, sample_count);
         self.bloom.resize(device, bloom_pipeline, width, height);
     }
 }
@@ -124,14 +129,16 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(device: &Device, queue: &Queue) -> Self {
+        let settings = RenderSettings::default();
+
         let mut shader_processor = ShaderProcessor::default();
         let bloom_pipeline = BloomPipeline::new(device, &mut shader_processor);
-        let sky = Sky::new(device, queue, &mut shader_processor);
+        let sky = Sky::new(device, queue, &mut shader_processor, settings.sample_count);
         let fxaa = Fxaa::new(device, &mut shader_processor);
         let tone_mapping = ToneMapping::new(&device, &mut shader_processor);
 
         let mut resources = Resources::new();
-        resources.insert(RenderSettings::default());
+        resources.insert(settings);
         resources.insert(shader_processor);
         resources.insert(bloom_pipeline);
 
@@ -237,13 +244,15 @@ impl Renderer {
     }
 
     pub fn prepare_cameras(&mut self, device: &Device, world: &World, target: &RenderTarget<'_>) {
+        let sample_count = self.settings().sample_count;
         let bloom_pipeline = self.resources.get::<BloomPipeline>().unwrap();
 
         for (camera_id, camera) in world.iter_cameras() {
             if let Some(prepared_camera) = self.prepared_cameras.get_mut(&camera_id) {
-                prepared_camera.prepare(device, bloom_pipeline, camera, target);
+                prepared_camera.prepare(device, bloom_pipeline, camera, target, sample_count);
             } else {
-                let camera = PreparedCamera::new(device, bloom_pipeline, camera, target);
+                let camera =
+                    PreparedCamera::new(device, bloom_pipeline, camera, target, sample_count);
 
                 self.prepared_cameras.insert(camera_id, camera);
             }
@@ -273,9 +282,16 @@ impl Renderer {
         world: &World,
         target: &RenderTarget<'_>,
     ) {
+        let sample_count = self.settings().sample_count;
         let prepared_environment = self.resources.get_mut::<PreparedEnvironment>().unwrap();
-        self.sky
-            .prepare(device, queue, world, target, prepared_environment);
+        self.sky.prepare(
+            device,
+            queue,
+            world,
+            target,
+            prepared_environment,
+            sample_count,
+        );
     }
 
     pub fn prepare(
@@ -366,13 +382,15 @@ impl Renderer {
             );
         }
 
-        self.fxaa.render(
-            device,
-            queue,
-            camera_id,
-            encoder,
-            &prepared_camera.frame_buffer,
-        );
+        if settings.fxaa_enabled {
+            self.fxaa.render(
+                device,
+                queue,
+                camera_id,
+                encoder,
+                &prepared_camera.frame_buffer,
+            );
+        }
 
         self.tone_mapping.run(
             device,

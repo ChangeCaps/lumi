@@ -1,17 +1,14 @@
 use std::{
-    borrow::Cow,
     collections::VecDeque,
     path::{Path, PathBuf},
 };
-
-use smallvec::SmallVec;
 
 use crate::{
     shader::{DefaultShader, ShaderError, ShaderRef},
     util::{HashMap, HashSet},
 };
 
-use super::{FsShaderIo, Shader, ShaderIo};
+use super::{FsShaderIo, Shader, ShaderDefHash, ShaderDefs, ShaderIo};
 
 const INCLUDE_DIRECTIVE: &str = "#include";
 const IFDEF_DIRECTIVE: &str = "#ifdef";
@@ -168,7 +165,8 @@ impl CachedShader {
 
                 let end = Self::find_end(source).ok_or_else(|| ShaderError::UnclosedDirective)?;
 
-                if defs.contains(def) == is_def {
+                let hash = ShaderDefHash::from_str(def);
+                if defs.contains(&hash) == is_def {
                     let inner = Self::process_defs(&source[..end], defs)?;
 
                     stripped_source.push_str(&inner);
@@ -219,34 +217,6 @@ impl CachedShader {
             source: stripped_source,
             includes,
         })
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct ShaderDefs {
-    defs: SmallVec<[Cow<'static, str>; 8]>,
-}
-
-impl ShaderDefs {
-    #[inline]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    #[inline]
-    pub fn set(&mut self, def: impl Into<Cow<'static, str>>) {
-        self.defs.push(def.into())
-    }
-
-    #[inline]
-    pub fn contains(&self, def: &str) -> bool {
-        self.defs.contains(&Cow::Borrowed(def))
-    }
-
-    #[inline]
-    pub fn finish(&mut self) {
-        self.defs.dedup();
-        self.defs.sort_unstable();
     }
 }
 
