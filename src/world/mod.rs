@@ -154,14 +154,22 @@ impl World {
     pub fn iter_nodes<T: Node>(&self) -> impl Iterator<Item = (NodeId, &T)> {
         self.nodes
             .iter()
-            .filter_map(|(id, node)| node.downcast_ref().map(|node| (*id, node)))
+            .filter_map(|(&id, node)| node.downcast_ref().map(|node| (id, node)))
     }
 
     #[inline]
     pub fn iter_nodes_mut<T: Node>(&mut self) -> impl Iterator<Item = (NodeId, &mut T)> {
-        self.nodes
-            .iter_mut()
-            .filter_map(|(id, node)| node.downcast_mut().map(|node| (*id, node)))
+        self.nodes.iter_mut().filter_map(|(&id, node)| {
+            let node = node.downcast_mut().map(|node| (id, node));
+
+            if node.is_none() {
+                self.change_sender
+                    .send(WorldChange::NodeRemoved(id))
+                    .unwrap();
+            }
+
+            node
+        })
     }
 
     #[inline]
@@ -178,9 +186,15 @@ impl World {
 
     #[inline]
     pub fn nodes_mut<T: Node>(&mut self) -> impl Iterator<Item = &mut T> {
-        self.nodes
-            .values_mut()
-            .filter_map(|node| node.as_mut().downcast_mut::<T>())
+        self.nodes.iter_mut().filter_map(|(&id, node)| {
+            let node = node.as_mut().downcast_mut::<T>();
+
+            if node.is_some() {
+                self.change_sender.send(WorldChange::Node(id)).unwrap();
+            }
+
+            node
+        })
     }
 
     #[inline]
@@ -195,7 +209,11 @@ impl World {
 
     #[inline]
     pub fn iter_lights_mut(&mut self) -> impl Iterator<Item = (LightId, &mut Light)> {
-        self.lights.iter_mut().map(|(id, light)| (*id, light))
+        self.lights.iter_mut().map(|(&id, light)| {
+            self.change_sender.send(WorldChange::Light(id)).unwrap();
+
+            (id, light)
+        })
     }
 
     #[inline]
@@ -210,7 +228,11 @@ impl World {
 
     #[inline]
     pub fn lights_mut(&mut self) -> impl Iterator<Item = &mut Light> {
-        self.lights.values_mut()
+        self.lights.iter_mut().map(|(&id, light)| {
+            self.change_sender.send(WorldChange::Light(id)).unwrap();
+
+            light
+        })
     }
 
     #[inline]
@@ -225,7 +247,11 @@ impl World {
 
     #[inline]
     pub fn iter_cameras_mut(&mut self) -> impl Iterator<Item = (CameraId, &mut Camera)> {
-        self.cameras.iter_mut().map(|(id, camera)| (*id, camera))
+        self.cameras.iter_mut().map(|(&id, camera)| {
+            self.change_sender.send(WorldChange::Camera(id)).unwrap();
+
+            (id, camera)
+        })
     }
 
     #[inline]
@@ -235,7 +261,11 @@ impl World {
 
     #[inline]
     pub fn cameras_mut(&mut self) -> impl Iterator<Item = &mut Camera> {
-        self.cameras.values_mut()
+        self.cameras.iter_mut().map(|(&id, camera)| {
+            self.change_sender.send(WorldChange::Camera(id)).unwrap();
+
+            camera
+        })
     }
 }
 
@@ -253,6 +283,10 @@ impl World {
         let node = self.nodes.remove(&id)?;
 
         if node.as_ref().type_id() == TypeId::of::<T>() {
+            self.change_sender
+                .send(WorldChange::NodeRemoved(id))
+                .unwrap();
+
             unsafe { Some(*Box::from_raw(Box::into_raw(node) as *mut T)) }
         } else {
             self.nodes.insert(id, node);
@@ -271,7 +305,11 @@ impl World {
     #[track_caller]
     pub fn node_mut<T: Node>(&mut self, id: NodeId) -> &mut T {
         let node = self.nodes.get_mut(&id).expect("Node not found");
-        node.as_mut().downcast_mut().expect("Node type mismatch")
+        let node = node.as_mut().downcast_mut().expect("Node type mismatch");
+
+        self.change_sender.send(WorldChange::Node(id)).unwrap();
+
+        node
     }
 }
 
@@ -302,13 +340,25 @@ impl World {
     #[inline]
     #[track_caller]
     pub fn light_mut<T: AsLight>(&mut self, id: LightId) -> &mut T {
-        T::as_light_mut(self.lights.get_mut(&id).expect("Light not found"))
-            .expect("light type mismatch")
+        let light = T::as_light_mut(self.lights.get_mut(&id).expect("Light not found"))
+            .expect("light type mismatch");
+
+        self.change_sender.send(WorldChange::Light(id)).unwrap();
+
+        light
     }
 
     #[inline]
     pub fn remove_light<T: AsLight>(&mut self, id: LightId) -> Option<T> {
-        T::from_light(self.lights.remove(&id)?)
+        if let Some(light) = T::from_light(self.lights.remove(&id)?) {
+            self.change_sender
+                .send(WorldChange::LightRemoved(id))
+                .unwrap();
+
+            Some(light)
+        } else {
+            None
+        }
     }
 }
 
@@ -329,11 +379,23 @@ impl World {
     #[inline]
     #[track_caller]
     pub fn camera_mut(&mut self, id: CameraId) -> &mut Camera {
-        self.cameras.get_mut(&id).expect("Camera not found")
+        let camera = self.cameras.get_mut(&id).expect("Camera not found");
+
+        self.change_sender.send(WorldChange::Camera(id)).unwrap();
+
+        camera
     }
 
     #[inline]
     pub fn remove_camera(&mut self, entity: CameraId) -> Option<Camera> {
-        self.cameras.remove(&entity)
+        let camera = self.cameras.remove(&entity);
+
+        if camera.is_some() {
+            self.change_sender
+                .send(WorldChange::CameraRemoved(entity))
+                .unwrap();
+        }
+
+        camera
     }
 }
