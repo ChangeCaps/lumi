@@ -17,7 +17,6 @@ struct Spheres {
 impl App for Spheres {
     fn init(world: &mut World, renderer: &mut Renderer) -> Self {
         renderer.settings_mut().render_sky = true;
-        //renderer.settings_mut().sample_count = 4;
 
         let mesh = MeshNode::new(
             StandardMaterial::default(),

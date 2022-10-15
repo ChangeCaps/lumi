@@ -2,13 +2,14 @@ use std::any::TypeId;
 
 use wgpu::{CommandEncoder, Device, Queue};
 
-use crate::{frame_buffer::FrameBuffer, prelude::World, resources::Resources};
+use crate::{frame_buffer::FrameBuffer, prelude::World, resources::Resources, world::WorldChanges};
 
 use super::{PhaseLabel, View};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ViewPhaseContext<'a> {
     pub label: PhaseLabel,
+    pub changes: &'a WorldChanges,
     pub view: &'a View,
     pub device: &'a Device,
     pub queue: &'a Queue,
@@ -144,11 +145,13 @@ impl RenderViewPhases {
         target: &FrameBuffer,
         view: &View,
         world: &World,
+        changes: &WorldChanges,
         resources: &mut Resources,
     ) {
         for entry in &mut self.phases {
             let context = ViewPhaseContext {
                 label: entry.label,
+                changes,
                 view,
                 device,
                 queue,
@@ -166,11 +169,13 @@ impl RenderViewPhases {
         target: &FrameBuffer,
         view: &View,
         world: &World,
+        changes: &WorldChanges,
         resources: &Resources,
     ) {
         for entry in &self.phases {
             let context = ViewPhaseContext {
                 label: entry.label,
+                changes,
                 view,
                 device,
                 queue,

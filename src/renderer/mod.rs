@@ -3,6 +3,7 @@ mod view_phase;
 
 use std::any::TypeId;
 
+use crossbeam::channel::Receiver;
 use glam::Mat4;
 use wgpu::{CommandEncoder, Queue, TextureView};
 
@@ -13,7 +14,7 @@ use crate::{
     environment::{PreparedEnvironment, Sky},
     frame_buffer::FrameBuffer,
     fxaa::Fxaa,
-    id::CameraId,
+    id::{CameraId, LightId, NodeId, WorldId},
     light::PrepareLightsPhase,
     material::MaterialPhase,
     mesh::PrepareMeshPhase,
@@ -22,7 +23,7 @@ use crate::{
     shadow::ShadowPhase,
     tone_mapping::ToneMapping,
     util::{HashMap, HashSet},
-    world::World,
+    world::{World, WorldChange, WorldChanges},
     Device,
 };
 
@@ -100,6 +101,60 @@ impl PreparedCamera {
     }
 }
 
+struct PreparedWorld {
+    id: WorldId,
+    changes: Receiver<WorldChange>,
+    nodes: HashSet<NodeId>,
+    cameras: HashSet<CameraId>,
+    lights: HashSet<LightId>,
+}
+
+#[derive(Default)]
+struct PreparedWorlds {
+    worlds: Vec<PreparedWorld>,
+}
+
+#[allow(dead_code)]
+impl PreparedWorlds {
+    #[inline]
+    fn contains(&self, id: WorldId) -> bool {
+        self.worlds.iter().any(|w| w.id == id)
+    }
+
+    #[inline]
+    fn get_index(&self, id: WorldId) -> Option<usize> {
+        self.worlds.iter().position(|w| w.id == id)
+    }
+
+    #[inline]
+    fn get(&self, id: WorldId) -> Option<&PreparedWorld> {
+        self.worlds.iter().find(|w| w.id == id)
+    }
+
+    #[inline]
+    fn get_mut(&mut self, id: WorldId) -> Option<&mut PreparedWorld> {
+        self.worlds.iter_mut().find(|w| w.id == id)
+    }
+
+    #[inline]
+    fn subscribe(&mut self, world: &World) -> &mut PreparedWorld {
+        if let Some(index) = self.get_index(world.id()) {
+            return &mut self.worlds[index];
+        }
+
+        let world = PreparedWorld {
+            id: world.id(),
+            changes: world.subscribe_changes(),
+            nodes: Default::default(),
+            cameras: Default::default(),
+            lights: Default::default(),
+        };
+
+        self.worlds.push(world);
+        self.worlds.last_mut().unwrap()
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct View {
     pub camera: CameraId,
@@ -122,6 +177,8 @@ pub struct Renderer {
     phases: RenderPhases,
     view_phases: RenderViewPhases,
     prepared_cameras: HashMap<CameraId, PreparedCamera>,
+    prepared_worlds: PreparedWorlds,
+    world_changes: WorldChanges,
     sky: Sky,
     fxaa: Fxaa,
     tone_mapping: ToneMapping,
@@ -148,6 +205,8 @@ impl Renderer {
             phases: RenderPhases::new(),
             view_phases: RenderViewPhases::new(),
             prepared_cameras: HashMap::default(),
+            prepared_worlds: PreparedWorlds::default(),
+            world_changes: WorldChanges::default(),
             sky,
             fxaa,
             tone_mapping,
@@ -211,14 +270,18 @@ impl Renderer {
             .expect("RenderViewPhase not found")
     }
 
+    #[track_caller]
     pub fn settings(&self) -> &RenderSettings {
         self.resources.get().unwrap()
     }
 
+    #[track_caller]
     pub fn settings_mut(&mut self) -> &mut RenderSettings {
         self.resources.get_mut().unwrap()
     }
 
+    #[inline]
+    #[track_caller]
     pub fn register(&mut self, device: &Device, queue: &Queue, world: &World) {
         for (type_id, register_fn) in world.register_fns() {
             if self.registered_renderables.contains(type_id) {
@@ -231,6 +294,47 @@ impl Renderer {
         }
     }
 
+    pub fn prepare_changes(&mut self, world: &World) {
+        let prepared_world = self.prepared_worlds.subscribe(world);
+
+        self.world_changes.clear();
+
+        for node_id in world.node_ids() {
+            if prepared_world.nodes.insert(node_id) {
+                self.world_changes.push_added_node(node_id);
+            }
+        }
+
+        for camera_id in world.camera_ids() {
+            if prepared_world.cameras.insert(camera_id) {
+                self.world_changes.push_added_camera(camera_id);
+            }
+        }
+
+        for light_id in world.light_ids() {
+            if prepared_world.lights.insert(light_id) {
+                self.world_changes.push_added_light(light_id);
+            }
+        }
+
+        for change in prepared_world.changes.iter() {
+            match change {
+                WorldChange::NodeRemoved(node_id) => {
+                    prepared_world.nodes.remove(&node_id);
+                }
+                WorldChange::CameraRemoved(camera_id) => {
+                    prepared_world.cameras.remove(&camera_id);
+                }
+                WorldChange::LightRemoved(light_id) => {
+                    prepared_world.lights.remove(&light_id);
+                }
+                _ => {}
+            }
+
+            self.world_changes.push(change);
+        }
+    }
+
     pub fn prepare_view(&mut self, device: &Device, queue: &Queue, world: &World, view: &View) {
         let prepared_camera = self.prepared_cameras.get(&view.camera).unwrap();
         self.view_phases.prepare(
@@ -239,10 +343,12 @@ impl Renderer {
             &prepared_camera.frame_buffer,
             view,
             world,
+            &self.world_changes,
             &mut self.resources,
         );
     }
 
+    #[track_caller]
     pub fn prepare_cameras(&mut self, device: &Device, world: &World, target: &RenderTarget<'_>) {
         let sample_count = self.settings().sample_count;
         let bloom_pipeline = self.resources.get::<BloomPipeline>().unwrap();
@@ -301,6 +407,7 @@ impl Renderer {
         world: &World,
         target: &RenderTarget<'_>,
     ) {
+        self.prepare_changes(world);
         self.register(device, queue, world);
         self.prepare_cameras(device, world, target);
         self.prepare_environment(device, queue, world);
@@ -309,8 +416,13 @@ impl Renderer {
             self.prepare_sky(device, queue, world, target);
         }
 
-        self.phases
-            .prepare(device, queue, world, &mut self.resources);
+        self.phases.prepare(
+            device,
+            queue,
+            world,
+            &self.world_changes,
+            &mut self.resources,
+        );
 
         for (camera_id, camera) in world.iter_cameras() {
             let aspect = camera.target.get_aspect(target);
@@ -363,6 +475,7 @@ impl Renderer {
             &prepared_camera.frame_buffer,
             &view,
             world,
+            &self.world_changes,
             &self.resources,
         );
 
@@ -412,8 +525,14 @@ impl Renderer {
 
         let mut encoder = device.create_command_encoder(&Default::default());
 
-        self.phases
-            .render(device, queue, &mut encoder, world, &self.resources);
+        self.phases.render(
+            device,
+            queue,
+            &mut encoder,
+            world,
+            &self.world_changes,
+            &self.resources,
+        );
 
         let mut sorted_cameras = world.iter_cameras().collect::<Vec<_>>();
         sorted_cameras.sort_unstable_by_key(|(_, camera)| camera.priority);

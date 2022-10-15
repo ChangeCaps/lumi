@@ -64,7 +64,7 @@ impl Default for ShaderDefsHash {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ShaderDefs {
-    defs: SmallVec<[ShaderDefHash; 8]>,
+    defs: SmallVec<[ShaderDefHash; 16]>,
 }
 
 impl ShaderDefs {

@@ -1,9 +1,11 @@
+use hashbrown::hash_map::Entry;
 use std::{
     any::Any,
-    collections::{hash_map::Entry, HashMap},
     fmt::Debug,
     hash::{Hash, Hasher},
 };
+
+use crate::util::{HashMap, RandomState};
 
 pub trait Key: Send + Sync + Any + Debug {
     fn hash(&self, hasher: &mut dyn Hasher);
@@ -48,12 +50,14 @@ impl PartialEq for dyn Key {
 impl Eq for dyn Key {}
 
 impl Hash for dyn Key {
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash(state);
     }
 }
 
 impl Clone for Box<dyn Key> {
+    #[inline]
     fn clone(&self) -> Self {
         self.box_clone()
     }
@@ -100,11 +104,11 @@ impl<T> KeyMap<T> {
     }
 
     #[inline]
-    pub fn entry<K: Key>(&mut self, key: K) -> Entry<'_, Box<dyn Key>, T> {
+    pub fn entry<K: Key>(&mut self, key: K) -> Entry<'_, Box<dyn Key>, T, RandomState> {
         self.map.entry(Box::new(key))
     }
 
-    #[inline]
+    #[inline(never)]
     pub fn get(&self, key: &dyn Key) -> Option<&T> {
         self.map.get(key)
     }

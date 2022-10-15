@@ -186,11 +186,10 @@ fn get_pbr_pixel(in: Pbr) -> PbrPixel {
 	pixel.thickness = 1.0;
 	pixel.transmission = in.transmission;
 	pixel.absorption = in.absorption;
-	pixel.absorption = vec3<f32>(0.0);
 
 	let air_ior = 1.0;
 	let ior = max(1.0, in.ior);
-	let ior = 1.5;
+	let ior = pixel.ior;
 
 	pixel.eta_ir = air_ior / ior;
 	pixel.eta_ri = ior / air_ior;

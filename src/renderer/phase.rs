@@ -2,7 +2,10 @@ use std::any::TypeId;
 
 use wgpu::{CommandEncoder, Device, Queue};
 
-use crate::prelude::{Resources, World};
+use crate::{
+    prelude::{Resources, World},
+    world::WorldChanges,
+};
 
 pub use lumi_macro::PhaseLabel;
 
@@ -40,6 +43,7 @@ pub enum DefaultPhases {
 #[derive(Clone, Copy, Debug)]
 pub struct PhaseContext<'a> {
     pub label: PhaseLabel,
+    pub changes: &'a WorldChanges,
     pub device: &'a Device,
     pub queue: &'a Queue,
 }
@@ -163,11 +167,13 @@ impl RenderPhases {
         device: &Device,
         queue: &Queue,
         world: &World,
+        changes: &WorldChanges,
         resources: &mut Resources,
     ) {
         for entry in self.phases.iter_mut() {
             let context = PhaseContext {
                 label: entry.label,
+                changes,
                 device,
                 queue,
             };
@@ -182,11 +188,13 @@ impl RenderPhases {
         queue: &Queue,
         encoder: &mut CommandEncoder,
         world: &World,
+        changes: &WorldChanges,
         resources: &Resources,
     ) {
         for entry in self.phases.iter() {
             let context = PhaseContext {
                 label: entry.label,
+                changes,
                 device,
                 queue,
             };
