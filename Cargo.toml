@@ -52,3 +52,7 @@ harness = false
 [[bench]]
 name = "resources"
 harness = false
+
+[[bench]]
+name = "id_map"
+harness = false

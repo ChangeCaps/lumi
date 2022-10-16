@@ -108,7 +108,7 @@ impl<T> KeyMap<T> {
         self.map.entry(Box::new(key))
     }
 
-    #[inline(never)]
+    #[inline]
     pub fn get(&self, key: &dyn Key) -> Option<&T> {
         self.map.get(key)
     }

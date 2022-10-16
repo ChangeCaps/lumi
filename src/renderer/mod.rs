@@ -14,7 +14,7 @@ use crate::{
     environment::{PreparedEnvironment, Sky},
     frame_buffer::FrameBuffer,
     fxaa::Fxaa,
-    id::{CameraId, LightId, NodeId, WorldId},
+    id::{CameraId, IdSet, LightId, NodeId, WorldId},
     light::PrepareLightsPhase,
     material::MaterialPhase,
     mesh::PrepareMeshPhase,
@@ -104,9 +104,7 @@ impl PreparedCamera {
 struct PreparedWorld {
     id: WorldId,
     changes: Receiver<WorldChange>,
-    nodes: HashSet<NodeId>,
-    cameras: HashSet<CameraId>,
-    lights: HashSet<LightId>,
+    objects: IdSet,
 }
 
 #[derive(Default)]
@@ -145,9 +143,7 @@ impl PreparedWorlds {
         let world = PreparedWorld {
             id: world.id(),
             changes: world.subscribe_changes(),
-            nodes: Default::default(),
-            cameras: Default::default(),
-            lights: Default::default(),
+            objects: IdSet::new(),
         };
 
         self.worlds.push(world);
@@ -300,35 +296,32 @@ impl Renderer {
         self.world_changes.clear();
 
         for node_id in world.node_ids() {
-            if prepared_world.nodes.insert(node_id) {
-                self.world_changes.push_added_node(node_id);
+            if prepared_world.objects.insert(node_id) {
+                self.world_changes.added.insert(node_id);
             }
         }
 
         for camera_id in world.camera_ids() {
-            if prepared_world.cameras.insert(camera_id) {
-                self.world_changes.push_added_camera(camera_id);
+            if prepared_world.objects.insert(camera_id) {
+                self.world_changes.added.insert(camera_id);
             }
         }
 
         for light_id in world.light_ids() {
-            if prepared_world.lights.insert(light_id) {
-                self.world_changes.push_added_light(light_id);
+            if prepared_world.objects.insert(light_id) {
+                self.world_changes.added.insert(light_id);
             }
         }
 
         for change in prepared_world.changes.iter() {
             match change {
-                WorldChange::NodeRemoved(node_id) => {
-                    prepared_world.nodes.remove(&node_id);
+                WorldChange::Changed(node_id) => {
+                    self.world_changes.changed.insert(node_id);
                 }
-                WorldChange::CameraRemoved(camera_id) => {
-                    prepared_world.cameras.remove(&camera_id);
+                WorldChange::Removed(node_id) => {
+                    prepared_world.objects.remove(&node_id);
+                    self.world_changes.removed.insert(node_id);
                 }
-                WorldChange::LightRemoved(light_id) => {
-                    prepared_world.lights.remove(&light_id);
-                }
-                _ => {}
             }
 
             self.world_changes.push(change);

@@ -6,88 +6,46 @@ use std::any::TypeId;
 use crossbeam::channel::{Receiver, Sender};
 pub use node::*;
 pub use transform::*;
+use uuid::Uuid;
 
 use crate::{
     camera::Camera,
     environment::Environment,
-    id::{CameraId, LightId, NodeId, WorldId},
+    id::{CameraId, IdMap, IdSet, LightId, NodeId, WorldId},
     light::{AmbientLight, AsLight, Light},
     renderable::{RegisterFn, Renderable},
-    util::{HashMap, HashSet},
+    util::HashMap,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WorldChange {
-    Node(NodeId),
-    Camera(CameraId),
-    Light(LightId),
-    NodeRemoved(NodeId),
-    CameraRemoved(CameraId),
-    LightRemoved(LightId),
+    Changed(Uuid),
+    Removed(Uuid),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorldChanges {
-    nodes_added: HashSet<NodeId>,
-    cameras_added: HashSet<CameraId>,
-    lights_added: HashSet<LightId>,
-    nodes_changed: HashSet<NodeId>,
-    cameras_changed: HashSet<CameraId>,
-    lights_changed: HashSet<LightId>,
-    nodes_removed: HashSet<NodeId>,
-    cameras_removed: HashSet<CameraId>,
-    lights_removed: HashSet<LightId>,
+    pub added: IdSet,
+    pub changed: IdSet,
+    pub removed: IdSet,
 }
 
 impl WorldChanges {
     #[inline]
     pub fn clear(&mut self) {
-        self.nodes_added.clear();
-        self.cameras_added.clear();
-        self.lights_added.clear();
-        self.nodes_changed.clear();
-        self.cameras_changed.clear();
-        self.lights_changed.clear();
-        self.nodes_removed.clear();
-        self.cameras_removed.clear();
-        self.lights_removed.clear();
-    }
-
-    #[inline]
-    pub fn push_added_node(&mut self, id: NodeId) {
-        self.nodes_added.insert(id);
-    }
-
-    #[inline]
-    pub fn push_added_camera(&mut self, id: CameraId) {
-        self.cameras_added.insert(id);
-    }
-
-    #[inline]
-    pub fn push_added_light(&mut self, id: LightId) {
-        self.lights_added.insert(id);
+        self.added.clear();
+        self.changed.clear();
+        self.removed.clear();
     }
 
     #[inline]
     pub fn push(&mut self, change: WorldChange) {
         match change {
-            WorldChange::Node(id) => {
-                self.nodes_changed.insert(id);
+            WorldChange::Changed(uuid) => {
+                self.changed.insert(uuid);
             }
-            WorldChange::Camera(id) => {
-                self.cameras_changed.insert(id);
-            }
-            WorldChange::Light(id) => {
-                self.lights_changed.insert(id);
-            }
-            WorldChange::NodeRemoved(id) => {
-                self.nodes_removed.insert(id);
-            }
-            WorldChange::CameraRemoved(id) => {
-                self.cameras_removed.insert(id);
-            }
-            WorldChange::LightRemoved(id) => {
-                self.lights_removed.insert(id);
+            WorldChange::Removed(uuid) => {
+                self.removed.insert(uuid);
             }
         }
     }
@@ -99,10 +57,10 @@ pub struct World {
     change_sender: Sender<WorldChange>,
     change_receiver: Receiver<WorldChange>,
     register_fns: HashMap<TypeId, RegisterFn>,
-    nodes: HashMap<NodeId, Box<dyn Node>>,
+    nodes: IdMap<Box<dyn Node>>,
     ambient_light: AmbientLight,
-    lights: HashMap<LightId, Light>,
-    cameras: HashMap<CameraId, Camera>,
+    lights: IdMap<Light>,
+    cameras: IdMap<Camera>,
 }
 
 impl Default for World {
@@ -123,10 +81,10 @@ impl World {
             change_sender,
             change_receiver,
             register_fns: HashMap::default(),
-            nodes: HashMap::default(),
+            nodes: IdMap::default(),
             ambient_light: AmbientLight::default(),
-            lights: HashMap::default(),
-            cameras: HashMap::default(),
+            lights: IdMap::default(),
+            cameras: IdMap::default(),
         }
     }
 
@@ -152,19 +110,21 @@ impl World {
 
     #[inline]
     pub fn iter_nodes<T: Node>(&self) -> impl Iterator<Item = (NodeId, &T)> {
-        self.nodes
-            .iter()
-            .filter_map(|(&id, node)| node.downcast_ref().map(|node| (id, node)))
+        self.nodes.iter().filter_map(|(&id, node)| {
+            node.downcast_ref()
+                .map(|node| (NodeId::from_uuid(id), node))
+        })
     }
 
     #[inline]
     pub fn iter_nodes_mut<T: Node>(&mut self) -> impl Iterator<Item = (NodeId, &mut T)> {
         self.nodes.iter_mut().filter_map(|(&id, node)| {
+            let id = NodeId::from_uuid(id);
             let node = node.downcast_mut().map(|node| (id, node));
 
             if node.is_none() {
                 self.change_sender
-                    .send(WorldChange::NodeRemoved(id))
+                    .send(WorldChange::Removed(id.uuid()))
                     .unwrap();
             }
 
@@ -174,7 +134,7 @@ impl World {
 
     #[inline]
     pub fn node_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
-        self.nodes.keys().copied()
+        self.nodes.keys().copied().map(NodeId::from_uuid)
     }
 
     #[inline]
@@ -187,10 +147,13 @@ impl World {
     #[inline]
     pub fn nodes_mut<T: Node>(&mut self) -> impl Iterator<Item = &mut T> {
         self.nodes.iter_mut().filter_map(|(&id, node)| {
+            let id = NodeId::from_uuid(id);
             let node = node.as_mut().downcast_mut::<T>();
 
             if node.is_some() {
-                self.change_sender.send(WorldChange::Node(id)).unwrap();
+                self.change_sender
+                    .send(WorldChange::Changed(id.uuid()))
+                    .unwrap();
             }
 
             node
@@ -204,13 +167,18 @@ impl World {
 
     #[inline]
     pub fn iter_lights(&self) -> impl Iterator<Item = (LightId, &Light)> {
-        self.lights.iter().map(|(id, light)| (*id, light))
+        self.lights
+            .iter()
+            .map(|(&id, light)| (LightId::from_uuid(id), light))
     }
 
     #[inline]
     pub fn iter_lights_mut(&mut self) -> impl Iterator<Item = (LightId, &mut Light)> {
         self.lights.iter_mut().map(|(&id, light)| {
-            self.change_sender.send(WorldChange::Light(id)).unwrap();
+            let id = LightId::from_uuid(id);
+            self.change_sender
+                .send(WorldChange::Changed(id.uuid()))
+                .unwrap();
 
             (id, light)
         })
@@ -218,7 +186,7 @@ impl World {
 
     #[inline]
     pub fn light_ids(&self) -> impl Iterator<Item = LightId> + '_ {
-        self.lights.keys().copied()
+        self.lights.keys().copied().map(LightId::from_uuid)
     }
 
     #[inline]
@@ -229,7 +197,10 @@ impl World {
     #[inline]
     pub fn lights_mut(&mut self) -> impl Iterator<Item = &mut Light> {
         self.lights.iter_mut().map(|(&id, light)| {
-            self.change_sender.send(WorldChange::Light(id)).unwrap();
+            let id = LightId::from_uuid(id);
+            self.change_sender
+                .send(WorldChange::Changed(id.uuid()))
+                .unwrap();
 
             light
         })
@@ -237,18 +208,23 @@ impl World {
 
     #[inline]
     pub fn camera_ids(&self) -> impl Iterator<Item = CameraId> + '_ {
-        self.cameras.keys().copied()
+        self.cameras.keys().copied().map(CameraId::from_uuid)
     }
 
     #[inline]
     pub fn iter_cameras(&self) -> impl Iterator<Item = (CameraId, &Camera)> {
-        self.cameras.iter().map(|(id, camera)| (*id, camera))
+        self.cameras
+            .iter()
+            .map(|(&id, camera)| (CameraId::from_uuid(id), camera))
     }
 
     #[inline]
     pub fn iter_cameras_mut(&mut self) -> impl Iterator<Item = (CameraId, &mut Camera)> {
         self.cameras.iter_mut().map(|(&id, camera)| {
-            self.change_sender.send(WorldChange::Camera(id)).unwrap();
+            let id = CameraId::from_uuid(id);
+            self.change_sender
+                .send(WorldChange::Changed(id.uuid()))
+                .unwrap();
 
             (id, camera)
         })
@@ -262,10 +238,17 @@ impl World {
     #[inline]
     pub fn cameras_mut(&mut self) -> impl Iterator<Item = &mut Camera> {
         self.cameras.iter_mut().map(|(&id, camera)| {
-            self.change_sender.send(WorldChange::Camera(id)).unwrap();
+            let id = CameraId::from_uuid(id);
+            self.change_sender
+                .send(WorldChange::Changed(id.uuid()))
+                .unwrap();
 
             camera
         })
+    }
+
+    pub fn set_lights(&mut self, lights: IdMap<Light>) {
+        self.lights = lights;
     }
 }
 
@@ -284,7 +267,7 @@ impl World {
 
         if node.as_ref().type_id() == TypeId::of::<T>() {
             self.change_sender
-                .send(WorldChange::NodeRemoved(id))
+                .send(WorldChange::Removed(id.uuid()))
                 .unwrap();
 
             unsafe { Some(*Box::from_raw(Box::into_raw(node) as *mut T)) }
@@ -307,7 +290,9 @@ impl World {
         let node = self.nodes.get_mut(&id).expect("Node not found");
         let node = node.as_mut().downcast_mut().expect("Node type mismatch");
 
-        self.change_sender.send(WorldChange::Node(id)).unwrap();
+        self.change_sender
+            .send(WorldChange::Changed(id.uuid()))
+            .unwrap();
 
         node
     }
@@ -343,7 +328,9 @@ impl World {
         let light = T::as_light_mut(self.lights.get_mut(&id).expect("Light not found"))
             .expect("light type mismatch");
 
-        self.change_sender.send(WorldChange::Light(id)).unwrap();
+        self.change_sender
+            .send(WorldChange::Changed(id.uuid()))
+            .unwrap();
 
         light
     }
@@ -352,7 +339,7 @@ impl World {
     pub fn remove_light<T: AsLight>(&mut self, id: LightId) -> Option<T> {
         if let Some(light) = T::from_light(self.lights.remove(&id)?) {
             self.change_sender
-                .send(WorldChange::LightRemoved(id))
+                .send(WorldChange::Removed(id.uuid()))
                 .unwrap();
 
             Some(light)
@@ -381,7 +368,9 @@ impl World {
     pub fn camera_mut(&mut self, id: CameraId) -> &mut Camera {
         let camera = self.cameras.get_mut(&id).expect("Camera not found");
 
-        self.change_sender.send(WorldChange::Camera(id)).unwrap();
+        self.change_sender
+            .send(WorldChange::Changed(id.uuid()))
+            .unwrap();
 
         camera
     }
@@ -392,7 +381,7 @@ impl World {
 
         if camera.is_some() {
             self.change_sender
-                .send(WorldChange::CameraRemoved(entity))
+                .send(WorldChange::Removed(entity.uuid()))
                 .unwrap();
         }
 
