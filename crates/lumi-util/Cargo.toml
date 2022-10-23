@@ -1,0 +1,47 @@
+[package]
+name = "lumi-util"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ahash = { version = "0.8", optional = true }
+async-trait = { version = "0.1", optional = true }
+bytemuck = { version = "1.12", optional = true }
+crossbeam = { version = "0.8", optional = true }
+dashmap = { version = "5.4", optional = true }
+glam = { version = "0.21", optional = true, features = ["bytemuck"] }
+hashbrown = { version = "0.12", optional = true }
+once_cell = { version = "1.15", optional = true }
+smallvec = { version = "1.8", optional = true }
+thiserror = { version = "1.0", optional = true }
+wgpu-types = { version = "0.14", optional = true }
+
+[features]
+default = [
+	"ahash",
+	"async-trait",
+	"bytemuck",
+	"crossbeam",
+	"dashmap",
+	"math",
+	"hashbrown",
+	"once_cell",
+	"smallvec",
+	"thiserror",
+	"wgpu-types",
+]
+
+ahash = ["dep:ahash"]
+async-trait = ["dep:async-trait"]
+bytemuck = ["dep:bytemuck"]
+crossbeam = ["dep:crossbeam"]
+dashmap = ["dep:dashmap", "ahash"]
+math = ["dep:glam"]
+hashbrown = ["dep:hashbrown", "ahash"]
+once_cell = ["dep:once_cell"]
+smallvec = ["dep:smallvec"]
+thiserror = ["dep:thiserror"]
+wgpu-types = ["dep:wgpu-types"]
+

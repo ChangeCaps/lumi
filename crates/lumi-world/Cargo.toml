@@ -1,0 +1,13 @@
+[package]
+name = "lumi-world"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lumi-bounds = { path = "../lumi-bounds", version = "0.1.0" }
+lumi-core = { path = "../lumi-core", version = "0.1.0" }
+lumi-id = { path = "../lumi-id", version = "0.1.0" }
+lumi-macro = { path = "../lumi-macro", version = "0.1.0" }
+lumi-util = { path = "../lumi-util", version = "0.1.0" }

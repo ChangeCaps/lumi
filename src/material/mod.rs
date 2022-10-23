@@ -21,7 +21,6 @@ use crate::{
     camera::RawCamera,
     environment::{EnvironmentBindings, PreparedEnvironment},
     frame_buffer::FrameBuffer,
-    id::{CameraId, NodeId},
     light::LightBindings,
     mesh::{Mesh, MeshBuffers, PrepareMeshFn},
     prelude::World,
@@ -30,95 +29,11 @@ use crate::{
     resources::Resources,
     shader::{DefaultShader, Shader, ShaderDefs, ShaderDefsHash, ShaderProcessor, ShaderRef},
     shadow::{ShadowFunctions, ShadowReceiverBindings},
-    util::HashMap,
     SharedBindGroup, SharedBuffer, SharedDevice, SharedRenderPipeline, SharedTextureView,
 };
 
 pub use standard::*;
 pub use unlit::*;
-
-#[derive(Clone, Debug)]
-pub struct MeshVertexLayout {
-    pub attribute: Cow<'static, str>,
-    pub format: VertexFormat,
-    pub location: u32,
-}
-
-#[derive(Debug)]
-pub struct MaterialPipeline {
-    pub vertex_shader: Shader,
-    pub fragment_shader: Shader,
-    pub vertices: Vec<MeshVertexLayout>,
-}
-
-pub trait Material: Bind + 'static {
-    #[inline(always)]
-    fn vertex_shader() -> ShaderRef {
-        ShaderRef::Default(DefaultShader::Vertex)
-    }
-
-    #[inline(always)]
-    fn fragment_shader() -> ShaderRef {
-        ShaderRef::Default(DefaultShader::Fragment)
-    }
-
-    #[inline(always)]
-    fn shader_defs(&self) -> ShaderDefs {
-        ShaderDefs::default()
-    }
-
-    #[inline(always)]
-    fn shader_defs_hash(&self) -> ShaderDefsHash {
-        self.shader_defs().hash()
-    }
-
-    #[inline(always)]
-    fn specialize(pipeline: &mut MaterialPipeline) {
-        pipeline.vertices = vec![
-            MeshVertexLayout {
-                attribute: Mesh::POSITION.into(),
-                format: VertexFormat::Float32x3,
-                location: 0,
-            },
-            MeshVertexLayout {
-                attribute: Mesh::NORMAL.into(),
-                format: VertexFormat::Float32x3,
-                location: 1,
-            },
-            MeshVertexLayout {
-                attribute: Mesh::TANGENT.into(),
-                format: VertexFormat::Float32x4,
-                location: 2,
-            },
-            MeshVertexLayout {
-                attribute: Mesh::UV_0.into(),
-                format: VertexFormat::Float32x2,
-                location: 3,
-            },
-        ];
-    }
-
-    #[inline(always)]
-    fn is_translucent(&self) -> bool {
-        false
-    }
-
-    fn use_ssr(&self) -> bool {
-        false
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Primitive<T = StandardMaterial> {
-    pub material: T,
-    pub mesh: Mesh,
-}
-
-impl<T> Primitive<T> {
-    pub fn new(material: T, mesh: Mesh) -> Self {
-        Self { material, mesh }
-    }
-}
 
 #[derive(Default)]
 pub struct MeshNodePipelines {
@@ -338,42 +253,6 @@ impl<T> MeshNode<T> {
 #[derive(Default)]
 struct MaterialState {
     bindings: HashMap<CameraId, Vec<(Bindings, ShaderDefsHash)>>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum DrawCommand {
-    Indexed { index_count: u32, base_vertex: i32 },
-    Vertex { vertex_count: u32 },
-}
-
-impl DrawCommand {
-    pub fn draw(&self, render_pass: &mut RenderPass) {
-        match *self {
-            DrawCommand::Indexed {
-                index_count,
-                base_vertex,
-            } => {
-                render_pass.draw_indexed(0..index_count, base_vertex, 0..1);
-            }
-            DrawCommand::Vertex { vertex_count } => {
-                render_pass.draw(0..vertex_count, 0..1);
-            }
-        }
-    }
-
-    pub fn draw_instanced(&self, render_pass: &mut RenderPass, instance_count: u32) {
-        match *self {
-            DrawCommand::Indexed {
-                index_count,
-                base_vertex,
-            } => {
-                render_pass.draw_indexed(0..index_count, base_vertex, 0..instance_count);
-            }
-            DrawCommand::Vertex { vertex_count } => {
-                render_pass.draw(0..vertex_count, 0..instance_count);
-            }
-        }
-    }
 }
 
 struct MaterialDraw {

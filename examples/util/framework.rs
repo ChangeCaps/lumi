@@ -4,8 +4,8 @@ use egui_wgpu_backend::ScreenDescriptor;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use futures_lite::future;
 
+use lumi::core::*;
 use lumi::prelude::*;
-use wgpu::*;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -94,10 +94,6 @@ pub trait App: 'static {
 }
 
 pub fn framework<T: App>() -> ! {
-    env_logger::builder()
-        .filter_module("lumi", log::LevelFilter::Trace)
-        .init();
-
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
 
@@ -132,7 +128,7 @@ pub fn framework<T: App>() -> ! {
     let mut resized = true;
 
     let mut world = World::new();
-    let mut renderer = Renderer::new(&device, &queue);
+    let mut renderer = Renderer::builder().build(&device);
 
     let mut app = T::init(&mut world, &mut renderer);
 

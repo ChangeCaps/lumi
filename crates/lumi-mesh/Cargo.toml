@@ -1,0 +1,26 @@
+[package]
+name = "lumi-mesh"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lumi-bounds = { path = "../lumi-bounds", version = "0.1.0", optional = true }
+lumi-id = { path = "../lumi-id", version = "0.1.0" }
+
+mikktspace = { version = "0.3.0", optional = true }
+
+[dependencies.lumi-util]
+path = "../lumi-util"
+version = "0.1.0"
+default-features = false
+features = ["bytemuck", "math"]
+
+[features]
+default = ["shape", "bounds", "generate_normals", "generate_tangents"]
+shape = []
+bounds = ["dep:lumi-bounds"]
+generate_normals = []
+generate_tangents = ["dep:mikktspace"]
+generate = ["generate_normals", "generate_tangents"]

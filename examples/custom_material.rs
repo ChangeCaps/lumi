@@ -3,6 +3,11 @@ mod util;
 use lumi::prelude::*;
 use lumi::{bind, bind_key, binding};
 
+#[derive(ShaderType)]
+struct Foo {
+    bar: f32,
+}
+
 #[derive(Bind)]
 struct CustomMaterial;
 

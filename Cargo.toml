@@ -2,48 +2,40 @@
 name = "lumi"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["lumi-macro", "lumi-bake"]
+members = ["crates/*"]
 
 [dev-dependencies]
 criterion = "0.3"
 egui = "0.19.0"
 egui_wgpu_backend = "0.20"
 egui_winit_platform = "0.16"
-env_logger = "0.9"
 futures-lite = "1.12"
 winit = "0.27"
 
 [dependencies]
-lumi-bake = { path = "lumi-bake", version = "0.1.0" }
-lumi-macro = { path = "lumi-macro", version = "0.1.0" }
+lumi-assets = { path = "crates/lumi-assets", version = "0.1.0" }
+lumi-bake = { path = "crates/lumi-bake", version = "0.1.0" }
+lumi-bind = { path = "crates/lumi-bind", version = "0.1.0" }
+lumi-core = { path = "crates/lumi-core", version = "0.1.0" }
+lumi-id = { path = "crates/lumi-id", version = "0.1.0" }
+lumi-macro = { path = "crates/lumi-macro", version = "0.1.0" }
+lumi-material = { path = "crates/lumi-material", version = "0.1.0", optional = true }
+lumi-mesh = { path = "crates/lumi-mesh", version = "0.1.0" }
+lumi-renderer = { path = "crates/lumi-renderer", version = "0.1.0" }
+lumi-task = { path = "crates/lumi-task", version = "0.1.0" }
+lumi-util = { path = "crates/lumi-util", version = "0.1.0" }
+lumi-world = { path = "crates/lumi-world", version = "0.1.0" }
 
-ahash = "0.8"
-anyhow = "1.0"
-bytemuck = { version = "1.12", features = ["derive"] }
-crossbeam = "0.8"
-encase = { version = "0.3", features = ["glam", "smallvec"] }
-glam = { version = "0.21", features = ["bytemuck"] }
-gltf = { version = "1.0", optional = true, features = ["KHR_materials_transmission"] }
-hashbrown = "0.12"
-image = { version = "0.24", optional = true }
-log = "0.4"
-mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
-naga = { version = "0.10", features = ["glsl-in", "wgsl-out"] }
-once_cell = "1.15"
-smallvec = "1.8"
-thiserror = "1.0"
-wgpu = "0.14"
-uuid = { version = "1.1", features = ["v4"] }
+tracing-log = "0.1"
 
 [features]
-default = ["gltf", "image"]
-gltf = ["dep:gltf", "image"]
-image = ["dep:image", "lumi-bake/image"]
-load-shaders = []
+default = ["material"]
+material = ["dep:lumi-material"]
 
 [[bench]]
 name = "key_map"

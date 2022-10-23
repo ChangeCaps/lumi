@@ -1,0 +1,18 @@
+[package]
+name = "lumi-bake"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lumi-core = { path = "../lumi-core", version = "0.1.0", default-features = false }
+lumi-task = { path = "../lumi-task", version = "0.1.0" }
+lumi-util = { path = "../lumi-util", version = "0.1.0" }
+
+image = { version = "0.24", optional = true }
+tracing-log = "0.1"
+
+[features]
+default = ["image"]
+image = ["lumi-core/image", "dep:image"]
