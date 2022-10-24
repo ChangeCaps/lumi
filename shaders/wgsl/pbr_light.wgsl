@@ -142,7 +142,10 @@ fn light_surface(
 	color += pixel.subsurface_color * subsurface * fd_lambert();
 #endif
 
-	return color * light.color * light.intensity * light.attenuation;
+	let color = color * light.color * light.intensity * light.attenuation;
+	let max_color = pixel.base_color * light.color * light.intensity * light.attenuation * 4.0;
+
+	return clamp(color, vec3<f32>(0.0), max_color);
 }
 
 fn point_light(	

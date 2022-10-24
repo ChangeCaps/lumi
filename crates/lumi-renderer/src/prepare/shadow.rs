@@ -16,11 +16,9 @@ use lumi_id::{Id, IdMap};
 use lumi_mesh::Mesh;
 use lumi_shader::{DefaultShader, ShaderProcessor, ShaderRef};
 use lumi_util::{math::Mat4, smallvec::SmallVec};
-use lumi_world::{DirectionalLight, Extract, Light, LightId, Node, World};
+use lumi_world::{DirectionalLight, Extract, ExtractOne, Light, LightId, Node, World};
 
-use crate::{
-    MeshTransform, PhaseContext, PreparedMesh, PreparedTransform, PreparedTransforms, RenderPhase,
-};
+use crate::{PhaseContext, PreparedMesh, PreparedTransform, RenderPhase};
 
 #[derive(Bind)]
 pub struct PreparedShadows {
@@ -187,9 +185,8 @@ impl ShadowDraw {
     }
 }
 
-#[derive(Default)]
 pub struct ShadowRenderState {
-    pub bindings: SmallVec<[Bindings; 4]>,
+    pub bindings: Bindings,
 }
 
 #[derive(Default)]
@@ -222,7 +219,7 @@ impl ShadowRenderFunction {
     #[inline]
     pub fn new<T>() -> Self
     where
-        T: Node + Extract<Mat4> + Extract<MeshTransform>,
+        T: Node + Extract<Mesh> + ExtractOne<Mat4>,
     {
         Self {
             prepare: Self::prepare_default::<T>,
@@ -237,7 +234,7 @@ impl ShadowRenderFunction {
         world: &World,
         resources: &mut Resources,
     ) where
-        T: Node + Extract<Mat4>,
+        T: Node + ExtractOne<Mat4>,
     {
         let target_id = target.id();
 
@@ -248,31 +245,27 @@ impl ShadowRenderFunction {
             ShadowPipeline::new(context.device, shader_processor)
         };
 
-        for (id, node) in context.changes.changed_nodes::<T>(world) {
+        for (id, _) in context.changes.changed_nodes::<T>(world) {
             let mut states = resources.remove_id_or_default::<ShadowRenderStates>(id);
-            let state = states.get_or_default(target_id);
-
-            let mut i = 0;
-            node.extract(&mut |_| {
-                if state.bindings.len() <= i {
-                    let new_bindings = pipeline.bindings_layout.create_bindings(context.device);
-                    state.bindings.push(new_bindings);
-                }
-
-                let bindings = &mut state.bindings[i];
-
-                let caster_bindings = ShadowCasterBindings {
-                    view_proj: view_proj.clone(),
-                };
-
-                let prepared_transforms = resources.get_id::<PreparedTransforms>(id).unwrap();
-
-                bindings.bind(context.device, context.queue, &caster_bindings);
-                bindings.bind(context.device, context.queue, &prepared_transforms[0]);
-                bindings.update_bind_groups(context.device);
-
-                i += 1;
+            let state = states.get_or_insert_with(target_id, || ShadowRenderState {
+                bindings: pipeline.bindings_layout.create_bindings(context.device),
             });
+
+            let bindings = &mut state.bindings;
+
+            let caster_bindings = ShadowCasterBindings {
+                view_proj: view_proj.clone(),
+            };
+
+            let transform = if let Some(transform) = resources.get_id::<PreparedTransform>(id) {
+                transform
+            } else {
+                continue;
+            };
+
+            bindings.bind(context.device, context.queue, &caster_bindings);
+            bindings.bind(context.device, context.queue, transform);
+            bindings.update_bind_groups(context.device);
 
             resources.insert_id(id.cast(), states);
         }
@@ -291,7 +284,7 @@ impl ShadowRenderFunction {
         world: &World,
         resources: &Resources,
     ) where
-        T: Node + Extract<MeshTransform>,
+        T: Node + Extract<Mesh> + ExtractOne<Mat4>,
     {
         let pipeline = resources.get::<ShadowPipeline>().unwrap();
 
@@ -300,12 +293,17 @@ impl ShadowRenderFunction {
         for (id, node) in world.iter_nodes::<T>() {
             let states = resources.get_id::<ShadowRenderStates>(id).unwrap();
             let state = states.get(target_id).unwrap();
+            let bindings = &state.bindings;
+
+            let transform = if let Some(&transform) = node.extract_one() {
+                transform
+            } else {
+                continue;
+            };
 
             let mut i = 0;
-            node.extract(&mut |mesh_transform| {
-                let bindings = &state.bindings[i];
-
-                let mesh_id = mesh_transform.mesh.id();
+            node.extract(&mut |mesh| {
+                let mesh_id = mesh.id();
 
                 let prepared_mesh = resources.get_id::<PreparedMesh>(mesh_id).unwrap();
                 let aabb = resources.get_id::<Aabb>(mesh_id).cloned();
@@ -322,9 +320,9 @@ impl ShadowRenderFunction {
                     bind_groups: bindings.bind_groups().cloned().collect(),
                     vertex_buffer,
                     index_buffer: prepared_mesh.indices.clone(),
-                    draw_command: mesh_transform.mesh.draw_command(),
+                    draw_command: mesh.draw_command(),
                     aabb,
-                    transform: mesh_transform.transform,
+                    transform,
                 };
 
                 draws.push(draw);

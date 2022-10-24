@@ -17,7 +17,7 @@ pub use lumi_world as world;
 
 pub use lumi_macro::ShaderType;
 
-pub use lumi_util::math::*;
+pub use lumi_util::math;
 
 pub mod prelude {
     pub use crate::DefaultPlugin;
@@ -40,7 +40,7 @@ pub mod prelude {
 }
 
 use material::MaterialPlugin;
-use renderer::{PreparePlugin, RenderPlugin, RendererBuilder, SkyPlugin};
+use renderer::{PostProcessPlugin, PreparePlugin, RenderPlugin, RendererBuilder, SkyPlugin};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultPlugin;
@@ -50,6 +50,8 @@ impl RenderPlugin for DefaultPlugin {
         builder
             .add_plugin(PreparePlugin)
             .add_plugin(SkyPlugin)
-            .add_plugin(MaterialPlugin::default());
+            .add_plugin(PostProcessPlugin)
+            .add_plugin(MaterialPlugin::default())
+            .add_asset_loader(core::ImageLoader);
     }
 }

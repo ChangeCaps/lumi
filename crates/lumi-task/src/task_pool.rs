@@ -102,15 +102,17 @@ impl TaskPool {
                 } else {
                     format!("Lumi TaskPool({})", i)
                 };
-                let stack_size = stack_size.unwrap_or(0);
 
-                std::thread::Builder::new()
-                    .name(thread_name)
-                    .stack_size(stack_size)
-                    .spawn(move || {
-                        let fut = executor.run(shutdown_rx.recv());
-                        future::block_on(fut).unwrap_err();
-                    })
+                let mut thread_builder = std::thread::Builder::new().name(thread_name);
+
+                if let Some(stack_size) = stack_size {
+                    thread_builder = thread_builder.stack_size(stack_size);
+                }
+
+                thread_builder.spawn(move || {
+                    let fut = executor.run(shutdown_rx.recv());
+                    future::block_on(fut).unwrap_err();
+                })
             })
             .try_fold(Vec::new(), |mut threads, thread| {
                 threads.push(thread?);

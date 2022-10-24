@@ -4,7 +4,7 @@ use lumi_util::async_trait;
 
 use crate::{Asset, AssetServer, Handle, HandleId};
 
-pub unsafe trait HandleUntyped: Send + Sync {
+pub unsafe trait HandleUntyped: Asset {
     fn type_id(&self) -> TypeId;
     fn id(&self) -> &HandleId;
 }

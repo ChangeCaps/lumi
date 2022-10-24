@@ -11,7 +11,7 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 	pbr.metallic = standard_material.metallic;
 	pbr.roughness = standard_material.roughness;
 	pbr.reflectance = standard_material.reflectance;	
-	pbr.emissive = standard_material.emissive;
+	pbr.emissive = standard_material.emissive * standard_material.emissive_factor;
 
 #ifdef CLEARCOAT
 	pbr.clearcoat = standard_material.clearcoat;

@@ -1,9 +1,9 @@
 mod camera;
 mod frame_buffer;
 mod integrated_brdf;
-mod mesh_transform;
 mod mip_chain;
 mod phase;
+mod post_process;
 mod prepare;
 mod render_plugin;
 mod sky;
@@ -14,9 +14,9 @@ mod world;
 pub use camera::*;
 pub use frame_buffer::*;
 pub use integrated_brdf::*;
-pub use mesh_transform::*;
 pub use mip_chain::*;
 pub use phase::*;
+pub use post_process::*;
 pub use prepare::*;
 pub use render_plugin::*;
 pub use sky::*;
@@ -26,7 +26,7 @@ pub use world::*;
 
 use std::any::TypeId;
 
-use lumi_assets::AssetServerBuilder;
+use lumi_assets::{AssetLoader, AssetServer, AssetServerBuilder};
 use lumi_bounds::{BoundingShape, CameraFrustum, Frustum};
 use lumi_core::{CommandEncoder, Device, Queue, RenderTarget, Resources, SharedBuffer};
 use lumi_id::IdMap;
@@ -35,6 +35,7 @@ use lumi_task::TaskPool;
 use lumi_util::{math::Mat4, HashSet};
 use lumi_world::{CameraId, CameraTarget, RawCamera, World, WorldChange, WorldChanges};
 
+#[derive(Clone, Copy, Debug)]
 pub struct RenderSettings {
     pub clear_color: [f32; 4],
     pub sample_count: u32,
@@ -99,6 +100,11 @@ impl RendererBuilder {
     pub fn add_plugin<T: RenderPlugin + 'static>(&mut self, plugin: T) -> &mut Self {
         plugin.build(self);
         self.plugins.push(Box::new(plugin));
+        self
+    }
+
+    pub fn add_asset_loader<T: AssetLoader>(&mut self, loader: T) -> &mut Self {
+        self.asset_server.add_loader(loader);
         self
     }
 
@@ -287,6 +293,11 @@ impl Renderer {
     #[track_caller]
     pub fn settings_mut(&mut self) -> &mut RenderSettings {
         self.resources.get_mut().unwrap()
+    }
+
+    #[track_caller]
+    pub fn asset_server(&self) -> &AssetServer {
+        self.resources.get().unwrap()
     }
 
     #[inline]

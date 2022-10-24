@@ -19,6 +19,9 @@ mod texture;
 mod texture_binding;
 mod uniform_binding;
 
+#[cfg(feature = "assets")]
+mod handle_bindings;
+
 pub use self::image::*;
 pub use bind_group::*;
 pub use bind_key::*;

@@ -1,34 +1,11 @@
-use std::ops::{Deref, DerefMut};
-
 use lumi_bind::Bind;
 use lumi_core::{Resources, UniformBuffer};
-use lumi_util::{math::Mat4, smallvec::SmallVec};
-use lumi_world::{Extract, Node, World};
+use lumi_util::math::Mat4;
+use lumi_world::{ExtractOne, Node, World};
 
 use crate::{PhaseContext, RenderPhase};
 
-#[derive(Debug, Default)]
-pub struct PreparedTransforms {
-    pub transforms: SmallVec<[PreparedTransform; 1]>,
-}
-
-impl Deref for PreparedTransforms {
-    type Target = SmallVec<[PreparedTransform; 1]>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.transforms
-    }
-}
-
-impl DerefMut for PreparedTransforms {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.transforms
-    }
-}
-
-#[derive(Debug, Bind)]
+#[derive(Debug, Default, Bind)]
 pub struct PreparedTransform {
     #[uniform]
     pub transform: UniformBuffer<Mat4>,
@@ -42,7 +19,7 @@ impl PrepareTransformFunction {
     #[inline]
     pub fn new<T>() -> Self
     where
-        T: Node + Extract<Mat4>,
+        T: Node + ExtractOne<Mat4>,
     {
         Self {
             prepare: Self::prepare_default::<T>,
@@ -51,29 +28,18 @@ impl PrepareTransformFunction {
 
     fn prepare_default<T>(context: &PhaseContext, world: &World, resources: &mut Resources)
     where
-        T: Node + Extract<Mat4>,
+        T: Node + ExtractOne<Mat4>,
     {
         for (id, node) in context.changes.changed_nodes::<T>(world) {
-            let prepared_transforms = resources.get_id_or_default::<PreparedTransforms>(id.cast());
-
-            let mut i = 0;
-            node.extract(&mut |&transform| {
-                if let Some(prepared) = prepared_transforms.get_mut(i) {
-                    prepared.transform.set(transform);
-                } else {
-                    let prepared = PreparedTransform {
-                        transform: UniformBuffer::new(transform),
-                    };
-
-                    prepared_transforms.push(prepared);
-                }
-
-                i += 1;
-            });
+            if let Some(&transform) = node.extract_one() {
+                let prepared_transform =
+                    resources.get_id_or_default::<PreparedTransform>(id.cast());
+                prepared_transform.transform.set(transform);
+            }
         }
 
         for id in context.changes.removed() {
-            resources.remove_id::<PreparedTransforms>(id);
+            resources.remove_id::<PreparedTransform>(id);
         }
     }
 

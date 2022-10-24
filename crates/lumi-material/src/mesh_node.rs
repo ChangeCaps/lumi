@@ -1,13 +1,12 @@
 use std::any::TypeId;
 
+use lumi_assets::{Asset, Handle};
 use lumi_core::{Device, Queue, Resources};
 use lumi_id::Id;
 use lumi_mesh::Mesh;
-use lumi_renderer::{
-    MeshTransform, PrepareMeshFunction, PrepareTransformFunction, ShadowRenderFunction,
-};
+use lumi_renderer::{PrepareMeshFunction, PrepareTransformFunction, ShadowRenderFunction};
 use lumi_util::math::Mat4;
-use lumi_world::{Extract, Renderable};
+use lumi_world::{Extract, ExtractOne, HandleRenderable, Renderable};
 
 use crate::{Material, MaterialRenderFunction, StandardMaterial};
 
@@ -87,19 +86,17 @@ impl<T: Material> Extract<Primitive<T>> for MeshNode<T> {
     }
 }
 
-impl<T: Material> Extract<MeshTransform> for MeshNode<T> {
-    #[inline]
-    fn extract(&self, extract: &mut dyn FnMut(&MeshTransform)) {
-        for primitive in &self.primitives {
-            extract(&MeshTransform::new(&primitive.mesh, self.transform));
-        }
-    }
-}
-
 impl<T: Material> Extract<Mat4> for MeshNode<T> {
     #[inline]
     fn extract(&self, extract: &mut dyn FnMut(&Mat4)) {
         extract(&self.transform);
+    }
+}
+
+impl<T: Material> ExtractOne<Mat4> for MeshNode<T> {
+    #[inline]
+    fn extract_one(&self) -> Option<&Mat4> {
+        Some(&self.transform)
     }
 }
 
@@ -119,7 +116,28 @@ impl<T: Material> Renderable for MeshNode<T> {
         );
         resources.insert_id(
             Id::from_hash(TypeId::of::<T>()),
-            MaterialRenderFunction::mesh_node::<T>(),
+            MaterialRenderFunction::new::<MeshNode<T>, T>(),
+        );
+    }
+}
+
+impl<T: Asset + Material> HandleRenderable for MeshNode<T> {
+    fn register_handle(_: &Device, _: &Queue, resources: &mut Resources) {
+        resources.insert_id(
+            Id::from_hash(TypeId::of::<T>()),
+            PrepareMeshFunction::new::<Handle<Self>>(),
+        );
+        resources.insert_id(
+            Id::from_hash(TypeId::of::<T>()),
+            PrepareTransformFunction::new::<Handle<Self>>(),
+        );
+        resources.insert_id(
+            Id::from_hash(TypeId::of::<T>()),
+            ShadowRenderFunction::new::<Handle<Self>>(),
+        );
+        resources.insert_id(
+            Id::from_hash(TypeId::of::<T>()),
+            MaterialRenderFunction::new::<Handle<MeshNode<T>>, T>(),
         );
     }
 }

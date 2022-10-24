@@ -20,6 +20,8 @@ impl App for Spheres {
     fn init(world: &mut World, renderer: &mut Renderer) -> Self {
         renderer.settings_mut().render_sky = true;
 
+        *world.environment_mut() = Environment::open("env.hdr").unwrap();
+
         let mesh = MeshNode::new(
             StandardMaterial::default(),
             shape::uv_sphere(1.0, 32),
@@ -61,7 +63,12 @@ impl App for Spheres {
             ..Default::default()
         });
 
-        let material = StandardMaterial::default();
+        let asset_server = renderer.asset_server();
+
+        let material = StandardMaterial {
+            base_color_texture: Some(asset_server.load("examples/assets/texture.png")),
+            ..Default::default()
+        };
 
         Self {
             camera,

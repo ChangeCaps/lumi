@@ -6,24 +6,29 @@ use lumi_util::math::{Vec3, Vec4};
 
 use crate::Material;
 
+#[cfg(feature = "assets")]
+pub type StandardMaterialImage = lumi_assets::Handle<Image>;
+#[cfg(not(feature = "assets"))]
+pub type StandardMaterialImage = Image;
+
 #[derive(Clone, Debug, Bind)]
 #[uniform(RawStandardMaterial = "standard_material")]
 pub struct StandardMaterial {
     #[texture]
     #[sampler(name = "base_color_sampler")]
-    pub base_color_texture: Option<Image>,
+    pub base_color_texture: Option<StandardMaterialImage>,
     #[texture]
     #[sampler(name = "metallic_roughness_sampler")]
-    pub metallic_roughness_texture: Option<Image>,
+    pub metallic_roughness_texture: Option<StandardMaterialImage>,
     #[texture]
     #[sampler(name = "normal_map_sampler")]
-    pub normal_map: Option<Image>,
+    pub normal_map: Option<StandardMaterialImage>,
     #[texture]
     #[sampler(name = "clearcoat_normal_map_sampler")]
-    pub clearcoat_normal_map: Option<Image>,
+    pub clearcoat_normal_map: Option<StandardMaterialImage>,
     #[texture]
     #[sampler(name = "emissive_map_sampler")]
-    pub emissive_map: Option<Image>,
+    pub emissive_map: Option<StandardMaterialImage>,
     pub base_color: Vec4,
     pub alpha_cutoff: f32,
     pub metallic: f32,
@@ -43,6 +48,7 @@ pub struct StandardMaterial {
 }
 
 impl Default for StandardMaterial {
+    #[inline]
     fn default() -> Self {
         Self {
             base_color_texture: None,
@@ -91,6 +97,7 @@ pub struct RawStandardMaterial {
 }
 
 impl From<&StandardMaterial> for RawStandardMaterial {
+    #[inline]
     fn from(material: &StandardMaterial) -> Self {
         Self {
             base_color: material.base_color,

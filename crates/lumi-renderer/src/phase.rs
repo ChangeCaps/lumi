@@ -29,13 +29,6 @@ impl PhaseLabel {
     }
 }
 
-#[derive(Clone, Copy, Debug, PhaseLabel)]
-pub enum CorePhase {
-    Prepare,
-    Clear,
-    Render,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct PhaseContext<'a> {
     pub label: PhaseLabel,

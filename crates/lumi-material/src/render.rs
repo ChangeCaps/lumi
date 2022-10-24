@@ -9,15 +9,15 @@ use lumi_core::{CommandEncoder, Device, Extent3d, Resources, SharedTextureView};
 use lumi_id::{Id, IdMap};
 use lumi_renderer::{
     CameraBindings, IntegratedBrdf, MipChain, MipChainPipeline, PreparedEnvironment,
-    PreparedLights, PreparedMesh, PreparedShadows, PreparedTransforms, RenderViewPhase,
+    PreparedLights, PreparedMesh, PreparedShadows, PreparedTransform, RenderViewPhase,
     ViewPhaseContext,
 };
 use lumi_shader::ShaderProcessor;
-use lumi_util::smallvec::SmallVec;
-use lumi_world::World;
+use lumi_util::{math::Mat4, smallvec::SmallVec};
+use lumi_world::{Extract, ExtractOne, Node, World};
 
 use crate::{
-    Material, MaterialDraw, MeshNode, PreparedMaterialPipeline, PreparedMaterialPipelineKey,
+    Material, MaterialDraw, PreparedMaterialPipeline, PreparedMaterialPipelineKey, Primitive,
 };
 
 #[derive(Bind)]
@@ -79,24 +79,28 @@ pub struct MaterialRenderFunction {
 
 impl MaterialRenderFunction {
     #[inline]
-    pub fn mesh_node<T: Material>() -> Self {
+    pub fn new<T, U>() -> Self
+    where
+        T: Node + Extract<Primitive<U>> + ExtractOne<Mat4>,
+        U: Material,
+    {
         Self {
-            prepare: Self::prepare_mesh_node::<T>,
-            render: Self::render_mesh_node::<T>,
+            prepare: Self::prepare_mesh_node::<T, U>,
+            render: Self::render_mesh_node::<T, U>,
         }
     }
 
-    fn prepare_mesh_node<T: Material>(
-        context: &ViewPhaseContext,
-        world: &World,
-        resources: &mut Resources,
-    ) {
+    fn prepare_mesh_node<T, U>(context: &ViewPhaseContext, world: &World, resources: &mut Resources)
+    where
+        T: Node + Extract<Primitive<U>> + ExtractOne<Mat4>,
+        U: Material,
+    {
         resources.register::<IntegratedBrdf>();
 
-        for (id, node) in context.changes.changed_nodes::<MeshNode<T>>(world) {
+        for (id, node) in context.changes.changed_nodes::<T>(world) {
             let mut states = resources.remove_id_or_default::<MaterialStates>(id);
 
-            for (i, primitive) in node.primitives.iter().enumerate() {
+            node.extract_enumerated(&mut |i, primitive| {
                 let key = PreparedMaterialPipelineKey::new(&primitive.material);
                 let pipeline_id = key.id();
 
@@ -107,7 +111,7 @@ impl MaterialRenderFunction {
                 } else {
                     let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
 
-                    let pipeline = PreparedMaterialPipeline::new::<T>(
+                    let pipeline = PreparedMaterialPipeline::new::<U>(
                         context.device,
                         &key.shader_defs,
                         shader_processor,
@@ -131,7 +135,7 @@ impl MaterialRenderFunction {
                     let prepared_lights = resources.get::<PreparedLights>().unwrap();
                     let prepared_environment = resources.get::<PreparedEnvironment>().unwrap();
                     let prepared_shadows = resources.get::<PreparedShadows>().unwrap();
-                    let prepared_transforms = resources.get_id::<PreparedTransforms>(id).unwrap();
+                    let prepared_transforms = resources.get_id::<PreparedTransform>(id).unwrap();
                     let integrated_brdf = resources.get::<IntegratedBrdf>().unwrap();
                     let ssr = resources.get_id::<Ssr>(context.view.camera).unwrap();
 
@@ -139,7 +143,7 @@ impl MaterialRenderFunction {
                     new_bindings.bind(context.device, context.queue, prepared_lights);
                     new_bindings.bind(context.device, context.queue, prepared_environment);
                     new_bindings.bind(context.device, context.queue, prepared_shadows);
-                    new_bindings.bind(context.device, context.queue, &prepared_transforms[0]);
+                    new_bindings.bind(context.device, context.queue, prepared_transforms);
                     new_bindings.bind(context.device, context.queue, integrated_brdf);
                     new_bindings.bind(context.device, context.queue, &ssr.bindings());
 
@@ -166,22 +170,31 @@ impl MaterialRenderFunction {
                     .bindings
                     .bind(context.device, context.queue, &primitive.material);
                 state.bindings.update_bind_groups(context.device);
-            }
+            });
 
             resources.insert_id(id.cast(), states);
         }
     }
 
-    fn render_mesh_node<T: Material>(
+    fn render_mesh_node<T, U>(
         _context: &ViewPhaseContext,
         draws: &mut Vec<MaterialDraw>,
         world: &World,
         resources: &Resources,
-    ) {
-        for (id, node) in world.iter_nodes::<MeshNode<T>>() {
+    ) where
+        T: Node + Extract<Primitive<U>> + ExtractOne<Mat4>,
+        U: Material,
+    {
+        for (id, node) in world.iter_nodes::<T>() {
             let states = resources.get_id::<MaterialStates>(id).unwrap();
 
-            for (i, primitive) in node.primitives.iter().enumerate() {
+            let transform = if let Some(&transform) = node.extract_one() {
+                transform
+            } else {
+                continue;
+            };
+
+            node.extract_enumerated(&mut |i, primitive| {
                 let state = &states[i];
                 let mesh_id = primitive.mesh.id();
 
@@ -219,11 +232,11 @@ impl MaterialRenderFunction {
                     draw_command: primitive.mesh.draw_command(),
                     ssr: primitive.material.use_ssr(),
                     aabb,
-                    transform: node.transform,
+                    transform,
                 };
 
                 draws.push(draw);
-            }
+            });
         }
     }
 

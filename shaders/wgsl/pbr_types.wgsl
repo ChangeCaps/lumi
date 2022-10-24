@@ -78,6 +78,8 @@ fn default_pbr(mesh: Mesh) -> Pbr {
 struct PbrPixel {
 	frag_coord: vec4<f32>,
 	position: vec3<f32>,
+	
+	base_color: vec3<f32>,
 
 	n: vec3<f32>,
 	v: vec3<f32>,
@@ -148,13 +150,15 @@ fn get_pbr_pixel(in: Pbr) -> PbrPixel {
 	pixel.frag_coord = in.frag_coord;
 	pixel.position = in.w_position;
 
+	pixel.base_color = in.base_color.rgb;
+
 	pixel.n = normalize(in.normal);
 	pixel.v = normalize(in.view);
 	pixel.r = reflect(-pixel.v, pixel.n);
 	pixel.nov = max(dot(pixel.n, pixel.v), 0.001);
 
 #ifdef CLEARCOAT
-	pixel.clearcoat_n = in.clearcoat_normal;
+	pixel.clearcoat_n = normalize(in.clearcoat_normal);
 	pixel.clearcoat_r = reflect(-pixel.v, pixel.clearcoat_n);
 	pixel.clearcoat_nov = max(dot(pixel.clearcoat_n, pixel.v), 0.001);
 #endif

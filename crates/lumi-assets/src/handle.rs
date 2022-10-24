@@ -61,6 +61,17 @@ impl<T: Asset> Handle<T> {
     }
 
     #[inline]
+    pub fn new(asset: T) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                id: HandleId::new(),
+                asset: OnceCell::with_value(asset),
+                tracker: None,
+            }),
+        }
+    }
+
+    #[inline]
     pub fn id(&self) -> &HandleId {
         &self.inner.id
     }
@@ -88,6 +99,13 @@ impl<T: Asset> Handle<T> {
     #[inline]
     pub fn wait(&self) -> &T {
         self.inner.asset.wait()
+    }
+}
+
+impl<T: Asset> From<T> for Handle<T> {
+    #[inline]
+    fn from(asset: T) -> Self {
+        Self::new(asset)
     }
 }
 

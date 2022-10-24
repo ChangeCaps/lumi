@@ -166,8 +166,8 @@ impl AssetServer {
     }
 
     #[inline]
-    pub fn load<T: Asset>(&self, path: &Path) -> Handle<T> {
-        let id = HandleId::from(path);
+    pub fn load<T: Asset>(&self, path: impl AsRef<Path>) -> Handle<T> {
+        let id = HandleId::from(path.as_ref());
         let handle = (TypeId::of::<T>(), id);
 
         if let Some(inner) = self.inner.handles.get(&handle) {
@@ -188,7 +188,10 @@ impl AssetServer {
 
         self.inner
             .task_pool
-            .spawn(self.clone().load_inner(handle.clone(), path.to_path_buf()))
+            .spawn(
+                self.clone()
+                    .load_inner(handle.clone(), path.as_ref().to_path_buf()),
+            )
             .detach();
 
         handle
