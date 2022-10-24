@@ -25,6 +25,12 @@ impl<T> UniformBuffer<T> {
     }
 
     #[inline]
+    pub fn set(&mut self, data: T) {
+        self.data = data;
+        self.write.mark();
+    }
+
+    #[inline]
     pub fn into_data(self) -> T {
         self.data
     }
@@ -40,7 +46,7 @@ where
         let mut data = SmallVec::<[u8; 64]>::with_capacity(size);
         data.resize(size, 0);
 
-        let mut buffer = encase::UniformBuffer::new(data.as_mut_slice());
+        let mut buffer = encase::StorageBuffer::new(data.as_mut_slice());
         buffer.write(&self.data).unwrap();
 
         data
@@ -51,7 +57,7 @@ where
         device.create_shared_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: self.bytes().as_slice(),
-            usage: BufferUsages::UNIFORM,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         })
     }
 

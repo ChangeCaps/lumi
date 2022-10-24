@@ -19,10 +19,6 @@ impl Mesh {
                     normals.push(normal);
                     normals.push(normal);
                 }
-
-                for normal in normals.iter_mut() {
-                    *normal = normal.normalize();
-                }
             } else {
                 for i in (0..positions.len()).step_by(3) {
                     let a = positions[i + 0];
@@ -37,12 +33,19 @@ impl Mesh {
                 }
             }
 
+            for normal in normals.iter_mut() {
+                *normal = normal.normalize();
+            }
+
             self.insert_attribute(Self::NORMAL, normals);
         }
     }
 
     pub fn with_normals(mut self) -> Self {
-        self.generate_normals();
+        if !self.has_attribute(Self::NORMAL) {
+            self.generate_normals();
+        }
+
         self
     }
 }

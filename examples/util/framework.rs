@@ -128,7 +128,7 @@ pub fn framework<T: App>() -> ! {
     let mut resized = true;
 
     let mut world = World::new();
-    let mut renderer = Renderer::builder().build(&device);
+    let mut renderer = Renderer::builder().add_plugin(DefaultPlugin).build(&device);
 
     let mut app = T::init(&mut world, &mut renderer);
 

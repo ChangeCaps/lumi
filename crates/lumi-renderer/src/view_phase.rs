@@ -3,12 +3,13 @@ use std::any::TypeId;
 use lumi_core::{CommandEncoder, Device, Queue, Resources};
 use lumi_world::{World, WorldChanges};
 
-use crate::{FrameBuffer, PhaseLabel, View};
+use crate::{EmptyPhase, FrameBuffer, PhaseLabel, View};
 
 #[derive(Clone, Copy, Debug)]
 pub struct ViewPhaseContext<'a> {
     pub label: PhaseLabel,
     pub changes: &'a WorldChanges,
+    pub target: &'a FrameBuffer,
     pub view: &'a View,
     pub device: &'a Device,
     pub queue: &'a Queue,
@@ -16,22 +17,18 @@ pub struct ViewPhaseContext<'a> {
 
 #[allow(unused_variables)]
 pub trait RenderViewPhase: Send + Sync + 'static {
-    fn prepare(
-        &mut self,
-        context: &ViewPhaseContext,
-        target: &FrameBuffer,
-        world: &World,
-        resources: &mut Resources,
-    );
+    fn prepare(&mut self, context: &ViewPhaseContext, world: &World, resources: &mut Resources) {}
     fn render(
         &self,
         context: &ViewPhaseContext,
         encoder: &mut CommandEncoder,
-        target: &FrameBuffer,
         world: &World,
         resources: &Resources,
-    );
+    ) {
+    }
 }
+
+impl RenderViewPhase for EmptyPhase {}
 
 struct ViewPhaseEntry {
     label: PhaseLabel,
@@ -151,12 +148,13 @@ impl RenderViewPhases {
             let context = ViewPhaseContext {
                 label: entry.label,
                 changes,
+                target,
                 view,
                 device,
                 queue,
             };
 
-            entry.phase.prepare(&context, target, world, resources);
+            entry.phase.prepare(&context, world, resources);
         }
     }
 
@@ -175,14 +173,13 @@ impl RenderViewPhases {
             let context = ViewPhaseContext {
                 label: entry.label,
                 changes,
+                target,
                 view,
                 device,
                 queue,
             };
 
-            entry
-                .phase
-                .render(&context, encoder, target, world, resources);
+            entry.phase.render(&context, encoder, world, resources);
         }
     }
 }

@@ -1,15 +1,25 @@
 mod camera;
 mod frame_buffer;
+mod integrated_brdf;
+mod mesh_transform;
+mod mip_chain;
 mod phase;
 mod prepare;
+mod render_plugin;
+mod sky;
 mod tone_mapping;
 mod view_phase;
 mod world;
 
 pub use camera::*;
 pub use frame_buffer::*;
+pub use integrated_brdf::*;
+pub use mesh_transform::*;
+pub use mip_chain::*;
 pub use phase::*;
 pub use prepare::*;
+pub use render_plugin::*;
+pub use sky::*;
 pub use tone_mapping::*;
 pub use view_phase::*;
 pub use world::*;
@@ -18,12 +28,12 @@ use std::any::TypeId;
 
 use lumi_assets::AssetServerBuilder;
 use lumi_bounds::{BoundingShape, CameraFrustum, Frustum};
-use lumi_core::{CommandEncoder, Device, Queue, RenderTarget, Resources};
+use lumi_core::{CommandEncoder, Device, Queue, RenderTarget, Resources, SharedBuffer};
 use lumi_id::IdMap;
 use lumi_shader::ShaderProcessor;
 use lumi_task::TaskPool;
 use lumi_util::{math::Mat4, HashSet};
-use lumi_world::{CameraId, CameraTarget, World, WorldChange, WorldChanges};
+use lumi_world::{CameraId, CameraTarget, RawCamera, World, WorldChange, WorldChanges};
 
 pub struct RenderSettings {
     pub clear_color: [f32; 4],
@@ -51,14 +61,12 @@ impl Default for RenderSettings {
     }
 }
 
-pub trait RenderPlugin {
-    fn build(self, builder: &mut RendererBuilder);
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct View {
     pub camera: CameraId,
     pub frustum: CameraFrustum,
+    pub raw_camera: RawCamera,
+    pub camera_buffer: SharedBuffer,
 }
 
 impl View {
@@ -78,15 +86,19 @@ pub struct RendererBuilder {
     task_pool: Option<TaskPool>,
     phases: RenderPhases,
     view_phases: RenderViewPhases,
+    plugins: Vec<Box<dyn RenderPlugin>>,
 }
 
 impl RendererBuilder {
     pub fn new() -> Self {
-        Self::default()
+        let mut this = Self::default();
+        this.add_plugin(CorePlugin);
+        this
     }
 
-    pub fn add_plugin<T: RenderPlugin>(&mut self, plugin: T) -> &mut Self {
+    pub fn add_plugin<T: RenderPlugin + 'static>(&mut self, plugin: T) -> &mut Self {
         plugin.build(self);
+        self.plugins.push(Box::new(plugin));
         self
     }
 
@@ -99,23 +111,25 @@ impl RendererBuilder {
         self
     }
 
+    #[track_caller]
     pub fn add_phase_before<T: RenderPhase>(
         &mut self,
         before: impl Into<PhaseLabel>,
         label: impl Into<PhaseLabel>,
         phase: T,
     ) -> &mut Self {
-        self.phases.insert_before(label, before, phase);
+        self.phases.insert_before(before, label, phase);
         self
     }
 
+    #[track_caller]
     pub fn add_phase_after<T: RenderPhase>(
         &mut self,
         after: impl Into<PhaseLabel>,
         label: impl Into<PhaseLabel>,
         phase: T,
     ) -> &mut Self {
-        self.phases.insert_after(label, after, phase);
+        self.phases.insert_after(after, label, phase);
         self
     }
 
@@ -128,23 +142,25 @@ impl RendererBuilder {
         self
     }
 
+    #[track_caller]
     pub fn add_view_phase_before<T: RenderViewPhase>(
         &mut self,
         before: impl Into<PhaseLabel>,
         label: impl Into<PhaseLabel>,
         phase: T,
     ) -> &mut Self {
-        self.view_phases.insert_before(label, before, phase);
+        self.view_phases.insert_before(before, label, phase);
         self
     }
 
+    #[track_caller]
     pub fn add_view_phase_after<T: RenderViewPhase>(
         &mut self,
         after: impl Into<PhaseLabel>,
         label: impl Into<PhaseLabel>,
         phase: T,
     ) -> &mut Self {
-        self.view_phases.insert_after(label, after, phase);
+        self.view_phases.insert_after(after, label, phase);
         self
     }
 
@@ -203,7 +219,7 @@ impl Renderer {
         resources.insert(shader_processor);
         resources.insert(asset_server);
 
-        Self {
+        let mut renderer = Self {
             resources,
             registered_renderables: HashSet::default(),
             phases: builder.phases,
@@ -212,7 +228,13 @@ impl Renderer {
             prepared_worlds: PreparedWorlds::default(),
             world_changes: WorldChanges::default(),
             tone_mapping,
+        };
+
+        for plugin in builder.plugins {
+            plugin.init(&mut renderer, device);
         }
+
+        renderer
     }
 
     pub fn phases(&self) -> &RenderPhases {
@@ -372,9 +394,14 @@ impl Renderer {
         for (camera_id, camera) in world.iter_cameras() {
             let aspect = camera.target.get_aspect(target);
 
+            let prepared_camera = self.prepared_cameras.get_mut(&camera_id).unwrap();
+            let camera_buffer = prepared_camera.camera.buffer(device, queue);
+
             let view = View {
                 camera: camera_id,
                 frustum: camera.camera_frustum(aspect),
+                raw_camera: camera.raw_with_aspect(aspect),
+                camera_buffer,
             };
 
             self.prepare_view(device, queue, world, &view);
@@ -392,11 +419,14 @@ impl Renderer {
     ) {
         let prepared_camera = self.prepared_cameras.get_mut(&camera_id).unwrap();
         let camera = world.camera(camera_id);
+        let camera_buffer = prepared_camera.camera.buffer(device, queue);
 
         let aspect = camera.target.get_aspect(target);
         let view = View {
             camera: camera_id,
             frustum: camera.camera_frustum(aspect),
+            raw_camera: camera.raw_with_aspect(aspect),
+            camera_buffer,
         };
 
         self.view_phases.render(

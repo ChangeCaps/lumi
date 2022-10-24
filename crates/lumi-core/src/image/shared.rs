@@ -10,8 +10,9 @@ use wgpu::{
 };
 
 use crate::{
-    BindKey, Device, Queue, SamplerBinding, SharedBindingResource, SharedDevice, SharedSampler,
-    SharedTexture, SharedTextureView, StorageTextureBinding, TextureBinding, TextureId,
+    BindKey, DefaultSampler, DefaultTexture, Device, Queue, SamplerBinding, SharedBindingResource,
+    SharedDevice, SharedSampler, SharedTexture, SharedTextureView, StorageTextureBinding,
+    TextureBinding, TextureId,
 };
 
 use super::ImageData;
@@ -346,5 +347,25 @@ impl SamplerBinding for Image {
 
             SharedBindingResource::Sampler(sampler)
         }
+    }
+}
+
+impl DefaultTexture for Image {
+    #[inline]
+    fn default_texture(device: &Device, queue: &Queue) -> SharedTextureView {
+        let data = ImageData::new(1, 1, vec![255; 4]);
+        data.create_view(device, queue)
+    }
+}
+
+impl DefaultSampler for Image {
+    #[inline]
+    fn default_sampler(device: &Device, _: &Queue) -> SharedSampler {
+        device.create_shared_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        })
     }
 }

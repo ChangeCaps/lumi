@@ -77,9 +77,9 @@ impl ToTokens for TextureSampleType {
                     tokens.extend(quote! { #lumi::TextureSampleType::Float { filterable: false } });
                 }
             }
-            Self::Depth => tokens.extend(quote! { #lumi::wgpu::TextureSampleType::Depth }),
-            Self::Uint => tokens.extend(quote! { #lumi::wgpu::TextureSampleType::Uint }),
-            Self::Sint => tokens.extend(quote! { #lumi::wgpu::TextureSampleType::Sint }),
+            Self::Depth => tokens.extend(quote! { #lumi::TextureSampleType::Depth }),
+            Self::Uint => tokens.extend(quote! { #lumi::TextureSampleType::Uint }),
+            Self::Sint => tokens.extend(quote! { #lumi::TextureSampleType::Sint }),
         }
     }
 }
@@ -478,7 +478,7 @@ fn impl_entries(data: &Data, type_attr: &TypeAttribute, lumi_core: &syn::Path) -
     let type_uniform = if let Some((ref uniform, ref name)) = type_attr.uniform {
         quote! {
             let mut entry = <#uniform as #lumi_core::UniformBinding>::entry();
-            entries.push_back(entry.into_layout_entry::<<#uniform as #lumi_core::bind::UniformBinding>::State>(#name));
+            entries.push_back(entry.into_layout_entry::<<#uniform as #lumi_core::UniformBinding>::State>(#name));
         }
     } else {
         quote!()

@@ -12,6 +12,8 @@ struct Spheres {
     material: StandardMaterial,
     spheres: Vec<NodeId>,
     start: Instant,
+    last_frame: Instant,
+    frame_times: Vec<f32>,
 }
 
 impl App for Spheres {
@@ -37,7 +39,6 @@ impl App for Spheres {
 
         world.add(MeshNode::new(
             StandardMaterial {
-                roughness: 0.7,
                 ..Default::default()
             },
             shape::cube(1000.0, 1.0, 1000.0),
@@ -68,6 +69,8 @@ impl App for Spheres {
             spheres: suzannes,
             material,
             start: Instant::now(),
+            last_frame: Instant::now(),
+            frame_times: Vec::new(),
         }
     }
 
@@ -103,14 +106,14 @@ impl App for Spheres {
                 ui.label("Subsurface Color");
                 egui::color_picker::color_edit_button_rgb(
                     ui,
-                    bytemuck::cast_mut(&mut self.material.subsurface_color),
+                    lumi_util::bytemuck::cast_mut(&mut self.material.subsurface_color),
                 );
                 ui.end_row();
 
                 ui.label("Base Color");
                 egui::color_picker::color_edit_button_rgba(
                     ui,
-                    bytemuck::cast_mut(&mut self.material.base_color),
+                    lumi_util::bytemuck::cast_mut(&mut self.material.base_color),
                     egui::color_picker::Alpha::OnlyBlend,
                 );
                 ui.end_row();
@@ -137,7 +140,7 @@ impl App for Spheres {
                 ui.label("Emissive");
                 egui::color_picker::color_edit_button_rgb(
                     ui,
-                    bytemuck::cast_mut(&mut self.material.emissive),
+                    lumi_util::bytemuck::cast_mut(&mut self.material.emissive),
                 );
                 ui.end_row();
 
@@ -155,7 +158,7 @@ impl App for Spheres {
                 ui.label("Absorption");
                 egui::color_picker::color_edit_button_rgb(
                     ui,
-                    bytemuck::cast_mut(&mut self.material.absorption),
+                    lumi_util::bytemuck::cast_mut(&mut self.material.absorption),
                 );
                 ui.end_row();
             });
@@ -172,6 +175,21 @@ impl App for Spheres {
             let h = x + z;
             spheres.transform = Mat4::from_translation(Vec3::new(translation.x, h, translation.z));
         }
+
+        egui::Window::new("Information").show(ctx, |ui| {
+            let frame_time = self.frame_times.iter().sum::<f32>() / self.frame_times.len() as f32;
+
+            ui.label(format!("FPS: {:.2}", 1.0 / frame_time));
+        });
+
+        self.frame_times
+            .push(self.last_frame.elapsed().as_secs_f32());
+
+        if self.frame_times.len() > 60 {
+            self.frame_times.remove(0);
+        }
+
+        self.last_frame = Instant::now();
     }
 }
 

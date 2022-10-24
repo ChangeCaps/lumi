@@ -27,6 +27,7 @@ lumi-macro = { path = "crates/lumi-macro", version = "0.1.0" }
 lumi-material = { path = "crates/lumi-material", version = "0.1.0", optional = true }
 lumi-mesh = { path = "crates/lumi-mesh", version = "0.1.0" }
 lumi-renderer = { path = "crates/lumi-renderer", version = "0.1.0" }
+lumi-shader = { path = "crates/lumi-shader", version = "0.1.0" }
 lumi-task = { path = "crates/lumi-task", version = "0.1.0" }
 lumi-util = { path = "crates/lumi-util", version = "0.1.0" }
 lumi-world = { path = "crates/lumi-world", version = "0.1.0" }

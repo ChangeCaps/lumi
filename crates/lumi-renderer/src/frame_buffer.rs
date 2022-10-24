@@ -150,23 +150,26 @@ impl FrameBuffer {
         );
     }
 
-    pub fn begin_hdr_render_pass<'a>(
+    pub fn begin_depth_prepass<'a>(&'a self, encoder: &'a mut CommandEncoder) -> RenderPass<'a> {
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Lumi Depth Render Pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &self.depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Load,
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        })
+    }
+
+    pub fn begin_hdr_clear_pass<'a>(
         &'a self,
         encoder: &'a mut CommandEncoder,
-        load: bool,
+        color: Color,
     ) -> RenderPass<'a> {
-        let color_load = if load {
-            LoadOp::Load
-        } else {
-            LoadOp::Clear(Color::TRANSPARENT)
-        };
-
-        let depth_load = if load {
-            LoadOp::Load
-        } else {
-            LoadOp::Clear(1.0)
-        };
-
         let (view, resolve_target) = if let Some(msaa) = &self.hdr_msaa_view {
             (msaa, Some(self.hdr_view.view()))
         } else {
@@ -179,15 +182,102 @@ impl FrameBuffer {
                 view,
                 resolve_target,
                 ops: Operations {
-                    load: color_load,
+                    load: LoadOp::Clear(color),
                     store: true,
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &self.depth_view,
                 depth_ops: Some(Operations {
-                    load: depth_load,
+                    load: LoadOp::Clear(1.0),
                     store: true,
+                }),
+                stencil_ops: None,
+            }),
+        })
+    }
+
+    pub fn begin_hdr_render_pass<'a>(&'a self, encoder: &'a mut CommandEncoder) -> RenderPass<'a> {
+        let (view, resolve_target) = if let Some(msaa) = &self.hdr_msaa_view {
+            (msaa, Some(self.hdr_view.view()))
+        } else {
+            (&self.hdr_view, None)
+        };
+
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Lumi HDR Render Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view,
+                resolve_target,
+                ops: Operations {
+                    load: LoadOp::Load,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &self.depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Load,
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        })
+    }
+
+    pub fn begin_hdr_opaque_resolve_pass<'a>(
+        &'a self,
+        encoder: &'a mut CommandEncoder,
+    ) -> RenderPass<'a> {
+        let (view, resolve_target) = if let Some(msaa) = &self.hdr_msaa_view {
+            (msaa, Some(self.hdr_view.view()))
+        } else {
+            (&self.hdr_view, None)
+        };
+
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Lumi HDR Resolve Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view,
+                resolve_target,
+                ops: Operations {
+                    load: LoadOp::Load,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &self.depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Load,
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        })
+    }
+
+    pub fn begin_hdr_resolve_pass<'a>(&'a self, encoder: &'a mut CommandEncoder) -> RenderPass<'a> {
+        let (view, resolve_target) = if let Some(msaa) = &self.hdr_msaa_view {
+            (msaa, Some(self.hdr_view.view()))
+        } else {
+            (&self.hdr_view, None)
+        };
+
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Lumi HDR Resolve Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view,
+                resolve_target,
+                ops: Operations {
+                    load: LoadOp::Load,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &self.depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Load,
+                    store: false,
                 }),
                 stencil_ops: None,
             }),

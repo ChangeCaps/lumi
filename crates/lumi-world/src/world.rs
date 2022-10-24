@@ -6,7 +6,7 @@ use lumi_util::{
     HashMap,
 };
 
-use crate::{AmbientLight, AsLight, Camera, Light, Node, RegisterFn, Renderable};
+use crate::{AmbientLight, AsLight, Camera, Environment, Light, Node, RegisterFn, Renderable};
 
 pub type WorldId = Id<World>;
 pub type NodeId = Id<dyn Node>;
@@ -47,18 +47,18 @@ impl WorldChanges {
     }
 
     #[inline]
-    pub fn added(&self) -> impl Iterator<Item = &Id> {
-        self.added.iter()
+    pub fn added(&self) -> impl Iterator<Item = Id> + '_ {
+        self.added.iter().copied()
     }
 
     #[inline]
-    pub fn changed(&self) -> impl Iterator<Item = &Id> {
-        self.changed.iter()
+    pub fn changed(&self) -> impl Iterator<Item = Id> + '_ {
+        self.changed.iter().copied()
     }
 
     #[inline]
-    pub fn removed(&self) -> impl Iterator<Item = &Id> {
-        self.removed.iter()
+    pub fn removed(&self) -> impl Iterator<Item = Id> + '_ {
+        self.removed.iter().copied()
     }
 
     #[inline]
@@ -67,7 +67,7 @@ impl WorldChanges {
         world: &'a World,
     ) -> impl Iterator<Item = (NodeId, &dyn Node)> {
         self.changed()
-            .filter_map(move |&id| Some((id.cast(), world.get_dyn_node(id.cast())?)))
+            .filter_map(move |id| Some((id.cast(), world.get_dyn_node(id.cast())?)))
     }
 
     #[inline]
@@ -76,12 +76,13 @@ impl WorldChanges {
         world: &'a World,
     ) -> impl Iterator<Item = (NodeId, &T)> {
         self.changed()
-            .filter_map(move |&id| Some((id.cast(), world.get_node(id.cast())?)))
+            .filter_map(move |id| Some((id.cast(), world.get_node(id.cast())?)))
     }
 }
 
 pub struct World {
     id: Id<World>,
+    environment: Environment,
     change_sender: Sender<WorldChange>,
     change_receiver: Receiver<WorldChange>,
     register_fns: HashMap<TypeId, RegisterFn>,
@@ -105,6 +106,7 @@ impl World {
 
         Self {
             id: Id::new(),
+            environment: Environment::default(),
             change_sender,
             change_receiver,
             register_fns: HashMap::default(),
@@ -123,6 +125,21 @@ impl World {
     #[inline]
     pub fn subscribe_changes(&self) -> Receiver<WorldChange> {
         self.change_receiver.clone()
+    }
+
+    #[inline]
+    pub fn environment(&self) -> &Environment {
+        &self.environment
+    }
+
+    #[inline]
+    pub fn environment_mut(&mut self) -> &mut Environment {
+        &mut self.environment
+    }
+
+    #[inline]
+    pub fn set_environment(&mut self, environment: Environment) {
+        self.environment = environment;
     }
 
     #[inline]

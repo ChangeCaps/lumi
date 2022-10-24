@@ -10,7 +10,7 @@ use crate::{PhaseContext, RenderPhase};
 #[derive(Default, Bind)]
 pub struct PreparedLights {
     #[uniform]
-    pub ambient: UniformBuffer<RawAmbientLight>,
+    pub ambient_light: UniformBuffer<RawAmbientLight>,
     #[uniform]
     pub point_light_count: UniformBuffer<u32>,
     #[storage_buffer]
@@ -31,7 +31,7 @@ impl PreparedLights {
 
     #[inline]
     pub fn clear(&mut self) {
-        *self.ambient = RawAmbientLight::default();
+        *self.ambient_light = RawAmbientLight::default();
         *self.point_light_count = 0;
         *self.directional_light_count = 0;
 
@@ -53,10 +53,12 @@ impl PreparedLights {
                 let cascade = self.next_cascade_index;
 
                 self.directional_lights.push(directional.raw(cascade));
-                self.cascade_indices.insert(id, cascade);
                 *self.directional_light_count += 1;
 
-                self.next_cascade_index += DirectionalLight::CASCADES;
+                if directional.shadows {
+                    self.cascade_indices.insert(id, cascade);
+                    self.next_cascade_index += DirectionalLight::CASCADES;
+                }
             }
         }
     }
@@ -70,7 +72,7 @@ impl RenderPhase for PrepareLights {
         let prepared_lights = resources.get_or_default::<PreparedLights>();
         prepared_lights.clear();
 
-        *prepared_lights.ambient = world.ambient().raw();
+        *prepared_lights.ambient_light = world.ambient().raw();
 
         for (id, point_light) in world.iter_lights() {
             prepared_lights.push(id, point_light);

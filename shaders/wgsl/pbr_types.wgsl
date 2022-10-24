@@ -189,7 +189,6 @@ fn get_pbr_pixel(in: Pbr) -> PbrPixel {
 
 	let air_ior = 1.0;
 	let ior = max(1.0, in.ior);
-	let ior = pixel.ior;
 
 	pixel.eta_ir = air_ior / ior;
 	pixel.eta_ri = ior / air_ior;

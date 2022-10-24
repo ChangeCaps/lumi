@@ -1,4 +1,4 @@
-use lumi_util::math::{Vec3, Vec3A, Vec4};
+use lumi_util::math::{Vec3, Vec3A, Vec4, Vec4Swizzles};
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -8,15 +8,15 @@ pub struct Plane {
 
 impl Plane {
     #[inline]
-    pub const fn new(normal: Vec3, d: f32) -> Self {
-        Self {
-            normal_d: Vec4::new(normal.x, normal.y, normal.z, d),
-        }
+    pub fn new(normal: Vec3, d: f32) -> Self {
+        Self::from_normal_d(Vec4::new(normal.x, normal.y, normal.z, d))
     }
 
     #[inline]
-    pub const fn from_normal_d(normal_d: Vec4) -> Self {
-        Self { normal_d }
+    pub fn from_normal_d(normal_d: Vec4) -> Self {
+        Self {
+            normal_d: normal_d * normal_d.xyz().length_recip(),
+        }
     }
 
     #[inline]

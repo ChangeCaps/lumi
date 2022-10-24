@@ -29,11 +29,10 @@ impl PhaseLabel {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PhaseLabel)]
-pub enum DefaultPhases {
-    PrepareMeshes,
-    PrepareLights,
-    Shadows,
+#[derive(Clone, Copy, Debug, PhaseLabel)]
+pub enum CorePhase {
+    Prepare,
+    Clear,
     Render,
 }
 
@@ -57,6 +56,11 @@ pub trait RenderPhase: Send + Sync + 'static {
     ) {
     }
 }
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EmptyPhase;
+
+impl RenderPhase for EmptyPhase {}
 
 struct PhaseEntry {
     label: PhaseLabel,
@@ -92,7 +96,6 @@ impl RenderPhases {
         label: impl Into<PhaseLabel>,
         phase: T,
     ) {
-        let before = before.into();
         let index = self.index_of(before).expect("Phase not found");
         self.phases.insert(
             index,
@@ -110,7 +113,6 @@ impl RenderPhases {
         label: impl Into<PhaseLabel>,
         phase: T,
     ) {
-        let after = after.into();
         let index = self.index_of(after).expect("Phase not found");
         self.phases.insert(
             index + 1,

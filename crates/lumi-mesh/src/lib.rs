@@ -157,6 +157,22 @@ impl Mesh {
         Some(aabb)
     }
 
+    #[cfg(feature = "lumi-core")]
+    pub fn draw_command(&self) -> lumi_core::DrawCommand {
+        if let Some(indices) = self.indices() {
+            lumi_core::DrawCommand::Indexed {
+                indices: 0..indices.len() as u32,
+                base_vertex: 0,
+            }
+        } else {
+            let len = self.positions().map_or(0, |positions| positions.len());
+
+            lumi_core::DrawCommand::Vertex {
+                vertices: 0..len as u32,
+            }
+        }
+    }
+
     pub fn transform(&mut self, transform: Mat4) {
         if let Some(positions) = self.positions_mut() {
             for position in positions {

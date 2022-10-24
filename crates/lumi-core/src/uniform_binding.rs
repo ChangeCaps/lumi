@@ -32,7 +32,7 @@ impl<T: ShaderType> UniformBinding for T {
     fn bind_key(&self) -> BindKey {
         let mut data = SmallVec::<[u8; 256]>::new();
         data.resize(self.size().get() as usize, 0u8);
-        let mut uniform_buffer = encase::UniformBuffer::new(data.as_mut_slice());
+        let mut uniform_buffer = encase::StorageBuffer::new(data.as_mut_slice());
         uniform_buffer.write(self).unwrap();
 
         BindKey::from_hash(&data)
@@ -50,6 +50,8 @@ impl<T: ShaderType> UniformBinding for T {
         let mut uniform_buffer = encase::UniformBuffer::new(data.as_mut_slice());
         uniform_buffer.write(self).unwrap();
 
+        let bind_key = BindKey::from_hash(&data);
+
         if let Some(state) = state {
             if state.buffer.size() < data.len() as u64 {
                 let buffer = device.create_shared_buffer_init(&BufferInitDescriptor {
@@ -59,7 +61,7 @@ impl<T: ShaderType> UniformBinding for T {
                 });
 
                 state.buffer = buffer.clone();
-                state.key = BindKey::from_hash(&data);
+                state.key = bind_key;
 
                 SharedBindingResource::Buffer(SharedBufferBinding {
                     buffer,
@@ -67,9 +69,9 @@ impl<T: ShaderType> UniformBinding for T {
                     size: None,
                 })
             } else {
-                if state.key != BindKey::from_hash(&data) {
+                if state.key != bind_key {
                     queue.write_buffer(&state.buffer, 0, &data);
-                    state.key = BindKey::from_hash(&data);
+                    state.key = bind_key;
                 }
 
                 SharedBindingResource::Buffer(SharedBufferBinding {
@@ -87,7 +89,7 @@ impl<T: ShaderType> UniformBinding for T {
 
             let new_state = UniformBindingState {
                 buffer: buffer.clone(),
-                key: BindKey::from_hash(&data),
+                key: bind_key,
             };
 
             *state = Some(new_state);

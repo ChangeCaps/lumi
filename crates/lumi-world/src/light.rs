@@ -175,9 +175,13 @@ impl DirectionalLight {
         let view = self.view();
         let far = self.depth / 2.0;
 
-        let outer = Frustum::from_view_proj(view, self.proj(cascade), far);
+        let outer = Frustum::from_view_proj(view.inverse(), self.proj(cascade), far);
         let inner = if cascade > 0 {
-            Some(Frustum::from_view_proj(view, self.proj(cascade - 1), far))
+            Some(Frustum::from_view_proj(
+                view.inverse(),
+                self.proj(cascade - 1),
+                far,
+            ))
         } else {
             None
         };

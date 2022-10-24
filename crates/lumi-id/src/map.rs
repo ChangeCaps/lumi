@@ -184,6 +184,14 @@ impl<K: ?Sized, V> IdMap<K, V> {
     }
 
     #[inline(always)]
+    pub fn get_or_default(&mut self, id: Id<K>) -> &mut V
+    where
+        V: Default,
+    {
+        self.map.entry(id).or_default()
+    }
+
+    #[inline(always)]
     pub fn remove(&mut self, id: impl AsRef<Id<K>>) -> Option<V> {
         self.map.remove(id.as_ref())
     }

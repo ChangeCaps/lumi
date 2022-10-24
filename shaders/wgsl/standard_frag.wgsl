@@ -19,7 +19,7 @@ fn fragment(mesh: Mesh) -> @location(0) vec4<f32> {
 #endif
 
 #ifdef THICKNESS
-	pbr.thickness = standard_material.thicknpixel.ior;
+	pbr.thickness = standard_material.thickness;
 #endif
 
 #ifdef SUBSURFACE

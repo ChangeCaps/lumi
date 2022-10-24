@@ -134,6 +134,11 @@ impl Resources {
     }
 
     #[inline]
+    pub fn remove_id_or_default<T: Resource + Default>(&mut self, id: impl AsRef<Id<T>>) -> T {
+        self.remove_id(id).unwrap_or_default()
+    }
+
+    #[inline]
     pub fn get_id<T: Resource>(&self, id: impl AsRef<Id<T>>) -> Option<&T> {
         self.id_map()?.get(id)
     }

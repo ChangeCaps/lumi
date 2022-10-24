@@ -16,7 +16,10 @@ impl Mesh {
     }
 
     pub fn with_tangents(mut self) -> Self {
-        self.generate_tangents();
+        if !self.has_attribute(Self::TANGENT) {
+            self.generate_tangents();
+        }
+
         self
     }
 }

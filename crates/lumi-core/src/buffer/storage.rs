@@ -40,7 +40,7 @@ where
         let mut data = SmallVec::<[u8; 64]>::with_capacity(size);
         data.resize(size, 0);
 
-        let mut buffer = encase::UniformBuffer::new(data.as_mut_slice());
+        let mut buffer = encase::StorageBuffer::new(data.as_mut_slice());
         buffer.write(&self.data).unwrap();
 
         data
@@ -51,7 +51,7 @@ where
         device.create_shared_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: data,
-            usage: BufferUsages::STORAGE,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         })
     }
 

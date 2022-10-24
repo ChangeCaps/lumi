@@ -4,7 +4,6 @@ use lumi_bind::Bind;
 use lumi_core::VertexFormat;
 use lumi_mesh::Mesh;
 use lumi_shader::{DefaultShader, Shader, ShaderDefs, ShaderDefsHash, ShaderRef};
-use lumi_util::math::Mat4;
 
 #[derive(Clone, Debug)]
 pub struct MeshVertexLayout {
@@ -23,11 +22,13 @@ pub struct MaterialPipeline {
 impl MaterialPipeline {
     #[inline]
     pub fn rebind(&mut self) {
-        self.vertex_shader.rebind_with(&mut self.fragment_shader);
+        self.vertex_shader
+            .rebind_with(&mut self.fragment_shader)
+            .unwrap();
     }
 }
 
-pub trait Material: Bind + 'static {
+pub trait Material: Bind + Send + Sync + 'static {
     #[inline(always)]
     fn vertex_shader() -> ShaderRef {
         ShaderRef::Default(DefaultShader::Vertex)
@@ -82,54 +83,5 @@ pub trait Material: Bind + 'static {
     #[inline(always)]
     fn use_ssr(&self) -> bool {
         false
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Primitive<T> {
-    pub material: T,
-    pub mesh: Mesh,
-}
-
-impl<T> Primitive<T> {
-    pub fn new(material: T, mesh: Mesh) -> Self {
-        Self { material, mesh }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct MeshNode<T> {
-    pub primitives: Vec<Primitive<T>>,
-    pub transform: Mat4,
-}
-
-impl<T> Default for MeshNode<T> {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            primitives: Vec::new(),
-            transform: Mat4::IDENTITY,
-        }
-    }
-}
-
-impl<T> MeshNode<T> {
-    #[inline]
-    pub fn new(material: T, mesh: Mesh, transform: Mat4) -> Self {
-        Self {
-            primitives: vec![Primitive::new(material, mesh)],
-            transform,
-        }
-    }
-
-    #[inline]
-    pub fn add_primitive(&mut self, material: T, mesh: Mesh) {
-        self.primitives.push(Primitive::new(material, mesh));
-    }
-
-    #[inline]
-    pub fn with_primitive(mut self, material: T, mesh: Mesh) -> Self {
-        self.add_primitive(material, mesh);
-        self
     }
 }

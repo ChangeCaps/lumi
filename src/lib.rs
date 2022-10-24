@@ -10,6 +10,7 @@ pub use lumi_id as id;
 pub use lumi_material as material;
 pub use lumi_mesh as mesh;
 pub use lumi_renderer as renderer;
+pub use lumi_shader as shader;
 pub use lumi_task as task;
 pub use lumi_util as util;
 pub use lumi_world as world;
@@ -19,16 +20,36 @@ pub use lumi_macro::ShaderType;
 pub use lumi_util::math::*;
 
 pub mod prelude {
+    pub use crate::DefaultPlugin;
     pub use lumi_bind::Bind;
     pub use lumi_core::{Image, ImageData, StorageBuffer, UniformBuffer};
     pub use lumi_macro::*;
+    pub use lumi_material::{Material, MeshNode, Primitive, StandardMaterial};
+    pub use lumi_mesh::{shape, Mesh, MeshId};
     pub use lumi_renderer::{
         PhaseContext, PhaseLabel, RenderPhase, RenderPlugin, RenderViewPhase, Renderer,
         RendererBuilder, ViewPhaseContext,
     };
+    pub use lumi_shader::{DefaultShader, Shader, ShaderRef};
     pub use lumi_util::math::*;
     pub use lumi_world::{
-        AmbientLight, Camera, CameraId, CameraTarget, DirectionalLight, Light, LightId, Node,
-        NodeId, Orthographic, Perspective, PointLight, Projection, World,
+        AmbientLight, Camera, CameraId, CameraTarget, DirectionalLight, Environment, EnvironmentId,
+        EnvironmentSource, Light, LightId, Node, NodeId, Orthographic, Perspective, PointLight,
+        Projection, World,
     };
+}
+
+use material::MaterialPlugin;
+use renderer::{PreparePlugin, RenderPlugin, RendererBuilder, SkyPlugin};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DefaultPlugin;
+
+impl RenderPlugin for DefaultPlugin {
+    fn build(&self, builder: &mut RendererBuilder) {
+        builder
+            .add_plugin(PreparePlugin)
+            .add_plugin(SkyPlugin)
+            .add_plugin(MaterialPlugin::default());
+    }
 }

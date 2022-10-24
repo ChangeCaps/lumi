@@ -170,6 +170,7 @@ struct BindingGroupEntry {
 }
 
 impl BindingGroupEntry {
+    #[inline(always)]
     fn update(&mut self, resource: SharedBindingResource) -> bool {
         if self.resource.as_ref() != Some(&resource) {
             self.resource = Some(resource);
@@ -248,7 +249,11 @@ impl Bindings {
                     .entries
                     .iter()
                     .map(|entry| {
-                        let resource = entry.resource.as_ref().unwrap();
+                        let resource = entry
+                            .resource
+                            .as_ref()
+                            .expect("Binding resource not set, maybe you forgot to bind it?");
+
                         BindGroupEntry {
                             binding: entry.binding,
                             resource: resource.as_binding_resource(),
