@@ -43,6 +43,11 @@ pub use uniform_binding::*;
 
 pub use wgpu::{util::BufferInitDescriptor, *};
 
+#[cfg(feature = "assets")]
+pub type MaybeHandle<T> = lumi_assets::Handle<T>;
+#[cfg(not(feature = "assets"))]
+pub type MaybeHandle<T> = T;
+
 #[doc(hidden)]
 pub use encase;
 
