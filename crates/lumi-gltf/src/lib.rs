@@ -1,14 +1,16 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+mod data;
+mod loader;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub use data::*;
+pub use loader::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+use lumi_renderer::{RenderPlugin, RendererBuilder};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GltfPlugin;
+
+impl RenderPlugin for GltfPlugin {
+    fn build(&self, builder: &mut RendererBuilder) {
+        builder.add_asset_loader(GltfLoader);
     }
 }

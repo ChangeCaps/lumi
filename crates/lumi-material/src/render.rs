@@ -14,7 +14,7 @@ use lumi_renderer::{
 };
 use lumi_shader::ShaderProcessor;
 use lumi_util::{math::Mat4, smallvec::SmallVec};
-use lumi_world::{Extract, ExtractOne, Node, World};
+use lumi_world::{Extract, Node, World};
 
 use crate::{
     Material, MaterialDraw, PreparedMaterialPipeline, PreparedMaterialPipelineKey, Primitive,
@@ -54,6 +54,7 @@ pub struct MaterialState {
 #[derive(Default)]
 pub struct MaterialStates {
     pub bindings: SmallVec<[MaterialState; 4]>,
+    pub transform: Mat4,
 }
 
 impl Deref for MaterialStates {
@@ -81,7 +82,7 @@ impl MaterialRenderFunction {
     #[inline]
     pub fn new<T, U>() -> Self
     where
-        T: Node + Extract<Primitive<U>> + ExtractOne<Mat4>,
+        T: Node + Extract<Primitive<U>>,
         U: Material,
     {
         Self {
@@ -92,13 +93,22 @@ impl MaterialRenderFunction {
 
     fn prepare_mesh_node<T, U>(context: &ViewPhaseContext, world: &World, resources: &mut Resources)
     where
-        T: Node + Extract<Primitive<U>> + ExtractOne<Mat4>,
+        T: Node + Extract<Primitive<U>>,
         U: Material,
     {
         resources.register::<IntegratedBrdf>();
 
-        for (id, node) in context.changes.changed_nodes::<T>(world) {
+        for (id, node) in world.iter_nodes::<T>() {
             let mut states = resources.remove_id_or_default::<MaterialStates>(id);
+
+            let transform = if let Some(transform) = resources.remove_id::<PreparedTransform>(id) {
+                transform
+            } else {
+                resources.insert_id(id.cast(), states);
+                return;
+            };
+
+            states.transform = *transform.transform;
 
             node.extract_enumerated(&mut |i, primitive| {
                 let key = PreparedMaterialPipelineKey::new(&primitive.material);
@@ -135,7 +145,6 @@ impl MaterialRenderFunction {
                     let prepared_lights = resources.get::<PreparedLights>().unwrap();
                     let prepared_environment = resources.get::<PreparedEnvironment>().unwrap();
                     let prepared_shadows = resources.get::<PreparedShadows>().unwrap();
-                    let prepared_transforms = resources.get_id::<PreparedTransform>(id).unwrap();
                     let integrated_brdf = resources.get::<IntegratedBrdf>().unwrap();
                     let ssr = resources.get_id::<Ssr>(context.view.camera).unwrap();
 
@@ -143,7 +152,7 @@ impl MaterialRenderFunction {
                     new_bindings.bind(context.device, context.queue, prepared_lights);
                     new_bindings.bind(context.device, context.queue, prepared_environment);
                     new_bindings.bind(context.device, context.queue, prepared_shadows);
-                    new_bindings.bind(context.device, context.queue, prepared_transforms);
+                    new_bindings.bind(context.device, context.queue, &transform);
                     new_bindings.bind(context.device, context.queue, integrated_brdf);
                     new_bindings.bind(context.device, context.queue, &ssr.bindings());
 
@@ -173,6 +182,7 @@ impl MaterialRenderFunction {
             });
 
             resources.insert_id(id.cast(), states);
+            resources.insert_id(id.cast(), transform);
         }
     }
 
@@ -182,14 +192,12 @@ impl MaterialRenderFunction {
         world: &World,
         resources: &Resources,
     ) where
-        T: Node + Extract<Primitive<U>> + ExtractOne<Mat4>,
+        T: Node + Extract<Primitive<U>>,
         U: Material,
     {
         for (id, node) in world.iter_nodes::<T>() {
-            let states = resources.get_id::<MaterialStates>(id).unwrap();
-
-            let transform = if let Some(&transform) = node.extract_one() {
-                transform
+            let states = if let Some(states) = resources.get_id::<MaterialStates>(id) {
+                states
             } else {
                 continue;
             };
@@ -232,7 +240,7 @@ impl MaterialRenderFunction {
                     draw_command: primitive.mesh.draw_command(),
                     ssr: primitive.material.use_ssr(),
                     aabb,
-                    transform,
+                    transform: states.transform,
                 };
 
                 draws.push(draw);
@@ -342,6 +350,10 @@ impl RenderViewPhase for RenderMaterials {
                 true
             }
         });
+
+        if draws.is_empty() {
+            return;
+        }
 
         draws.sort_by(|a, b| {
             let a = a.distance(context.view.frustum());

@@ -30,7 +30,7 @@ impl PrepareTransformFunction {
     where
         T: Node + ExtractOne<Mat4>,
     {
-        for (id, node) in context.changes.changed_nodes::<T>(world) {
+        for (id, node) in world.iter_nodes::<T>() {
             if let Some(&transform) = node.extract_one() {
                 let prepared_transform =
                     resources.get_id_or_default::<PreparedTransform>(id.cast());

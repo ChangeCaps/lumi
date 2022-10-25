@@ -187,7 +187,6 @@ fn get_pbr_pixel(in: Pbr) -> PbrPixel {
 #endif
 
 #ifdef TRANSMISSION
-	pixel.thickness = 1.0;
 	pixel.transmission = in.transmission;
 	pixel.absorption = in.absorption;
 

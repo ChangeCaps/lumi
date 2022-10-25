@@ -38,12 +38,14 @@ pub struct ShadowMaps {
 }
 
 impl ShadowMaps {
+    const CASCADE_SIZE: u32 = 4096;
+
     pub fn new(device: &Device) -> Self {
         let directional = device.create_shared_texture(&TextureDescriptor {
             label: Some("Directional Shadow Map"),
             size: Extent3d {
-                width: 2048,
-                height: 2048,
+                width: Self::CASCADE_SIZE,
+                height: Self::CASCADE_SIZE,
                 depth_or_array_layers: 4,
             },
             mip_level_count: 1,
@@ -89,8 +91,8 @@ impl ShadowMaps {
         self.directional = device.create_shared_texture(&TextureDescriptor {
             label: Some("Directional Shadow Map"),
             size: Extent3d {
-                width: 2048,
-                height: 2048,
+                width: Self::CASCADE_SIZE,
+                height: Self::CASCADE_SIZE,
                 depth_or_array_layers: cascades,
             },
             mip_level_count: 1,

@@ -36,9 +36,9 @@ lumi-world = { path = "crates/lumi-world", version = "0.1.0" }
 tracing-log = "0.1"
 
 [features]
-default = ["material", "assets"]
+default = ["material", "assets", "gltf"]
 material = ["lumi-material"]
-assets = ["lumi-core/assets", "lumi-material/assets"]
+assets = ["lumi-core/assets"]
 gltf = ["lumi-gltf"]
 
 [[bench]]

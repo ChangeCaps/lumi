@@ -28,7 +28,7 @@ impl PrepareMeshFunction {
     where
         T: Node + Extract<Mesh>,
     {
-        for (_id, node) in context.changes.changed_nodes::<T>(world) {
+        for node in world.nodes::<T>() {
             node.extract(&mut |mesh| {
                 let id = mesh.id();
 

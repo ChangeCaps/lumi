@@ -138,7 +138,7 @@ fn environment(pixel: PbrPixel) -> vec3<f32> {
 	diffuse *= attenuation;
 	specular *= attenuation;
 
-	specular += env_indirect(pixel.clearcoat_perceptual_roughness, pixel.clearcoat_r) * fc;
+	specular += env_indirect(pixel.clearcoat_roughness, pixel.clearcoat_r) * fc;
 #endif
 
 	diffuse *= ambient_light.color * camera.exposure;

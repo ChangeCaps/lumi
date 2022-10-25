@@ -151,7 +151,7 @@ fn directional_pcss(
 		plane_bias,
 		search_radius,
 		trig,
-		12u,
+		16u,
 	);
 
 	if blocker.y < 1.0 {
@@ -160,7 +160,7 @@ fn directional_pcss(
 
 	let avg_z = blocker.x * light.depth;
 
-	var penumbra = penumbra_radius_uv(z_vs, avg_z) * 0.05 * light.softness;
+	var penumbra = penumbra_radius_uv(z_vs, avg_z) * light.softness / 8.0;
 	penumbra = 1.0 - pow(1.0 - penumbra, light.falloff);
 	
 	var filter_radius = vec2<f32>(penumbra - 0.015 * light.softness) / light.size;

@@ -192,6 +192,7 @@ pub struct ShadowRenderState {
 #[derive(Default)]
 pub struct ShadowRenderStates {
     pub states: IdMap<ShadowTarget, ShadowRenderState>,
+    pub transform: Mat4,
 }
 
 impl Deref for ShadowRenderStates {
@@ -245,8 +246,19 @@ impl ShadowRenderFunction {
             ShadowPipeline::new(context.device, shader_processor)
         };
 
-        for (id, _) in context.changes.changed_nodes::<T>(world) {
+        for (id, _) in world.iter_nodes::<T>() {
             let mut states = resources.remove_id_or_default::<ShadowRenderStates>(id);
+
+            let transform = if let Some(transform) = resources.get_id::<PreparedTransform>(id) {
+                transform
+            } else {
+                resources.insert_id(id.cast(), states);
+
+                continue;
+            };
+
+            states.transform = *transform.transform;
+
             let state = states.get_or_insert_with(target_id, || ShadowRenderState {
                 bindings: pipeline.bindings_layout.create_bindings(context.device),
             });
@@ -255,12 +267,6 @@ impl ShadowRenderFunction {
 
             let caster_bindings = ShadowCasterBindings {
                 view_proj: view_proj.clone(),
-            };
-
-            let transform = if let Some(transform) = resources.get_id::<PreparedTransform>(id) {
-                transform
-            } else {
-                continue;
             };
 
             bindings.bind(context.device, context.queue, &caster_bindings);
@@ -295,17 +301,16 @@ impl ShadowRenderFunction {
             let state = states.get(target_id).unwrap();
             let bindings = &state.bindings;
 
-            let transform = if let Some(&transform) = node.extract_one() {
-                transform
-            } else {
-                continue;
-            };
-
             let mut i = 0;
             node.extract(&mut |mesh| {
                 let mesh_id = mesh.id();
 
-                let prepared_mesh = resources.get_id::<PreparedMesh>(mesh_id).unwrap();
+                let prepared_mesh = if let Some(mesh) = resources.get_id::<PreparedMesh>(mesh_id) {
+                    mesh
+                } else {
+                    return;
+                };
+
                 let aabb = resources.get_id::<Aabb>(mesh_id).cloned();
 
                 let vertex_buffer =
@@ -322,7 +327,7 @@ impl ShadowRenderFunction {
                     index_buffer: prepared_mesh.indices.clone(),
                     draw_command: mesh.draw_command(),
                     aabb,
-                    transform,
+                    transform: states.transform,
                 };
 
                 draws.push(draw);

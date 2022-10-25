@@ -1,34 +1,30 @@
 use lumi_bind::Bind;
 use lumi_core::Image;
+use lumi_core::MaybeHandle;
 use lumi_macro::ShaderType;
 use lumi_shader::{ShaderDefs, ShaderRef};
 use lumi_util::math::{Vec3, Vec4};
 
 use crate::Material;
 
-#[cfg(feature = "assets")]
-pub type StandardMaterialImage = lumi_assets::Handle<Image>;
-#[cfg(not(feature = "assets"))]
-pub type StandardMaterialImage = Image;
-
 #[derive(Clone, Debug, Bind)]
 #[uniform(RawStandardMaterial = "standard_material")]
 pub struct StandardMaterial {
     #[texture]
     #[sampler(name = "base_color_sampler")]
-    pub base_color_texture: Option<StandardMaterialImage>,
+    pub base_color_texture: Option<MaybeHandle<Image>>,
     #[texture]
     #[sampler(name = "metallic_roughness_sampler")]
-    pub metallic_roughness_texture: Option<StandardMaterialImage>,
+    pub metallic_roughness_texture: Option<MaybeHandle<Image>>,
     #[texture]
     #[sampler(name = "normal_map_sampler")]
-    pub normal_map: Option<StandardMaterialImage>,
+    pub normal_map: Option<MaybeHandle<Image>>,
     #[texture]
     #[sampler(name = "clearcoat_normal_map_sampler")]
-    pub clearcoat_normal_map: Option<StandardMaterialImage>,
+    pub clearcoat_normal_map: Option<MaybeHandle<Image>>,
     #[texture]
     #[sampler(name = "emissive_map_sampler")]
-    pub emissive_map: Option<StandardMaterialImage>,
+    pub emissive_map: Option<MaybeHandle<Image>>,
     pub base_color: Vec4,
     pub alpha_cutoff: f32,
     pub metallic: f32,
@@ -40,6 +36,7 @@ pub struct StandardMaterial {
     pub emissive_factor: f32,
     pub emissive_exposure_compensation: f32,
     pub thickness: f32,
+    pub subsurface: bool,
     pub subsurface_power: f32,
     pub subsurface_color: Vec3,
     pub transmission: f32,
@@ -56,7 +53,7 @@ impl Default for StandardMaterial {
             normal_map: None,
             clearcoat_normal_map: None,
             emissive_map: None,
-            base_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            base_color: Vec4::ONE,
             alpha_cutoff: 0.01,
             metallic: 0.01,
             roughness: 0.089,
@@ -67,11 +64,12 @@ impl Default for StandardMaterial {
             emissive_factor: 8.0,
             emissive_exposure_compensation: 0.0,
             thickness: 1.0,
+            subsurface: false,
             subsurface_power: 0.0,
-            subsurface_color: Vec3::new(0.0, 0.0, 0.0),
+            subsurface_color: Vec3::ONE,
             transmission: 0.0,
             ior: 1.5,
-            absorption: Vec3::new(0.0, 0.0, 0.0),
+            absorption: Vec3::ZERO,
         }
     }
 }
@@ -154,11 +152,15 @@ impl Material for StandardMaterial {
             shader_defs.push("CLEARCOAT");
         }
 
+        if self.subsurface {
+            shader_defs.push("SUBSURFACE");
+        }
+
         if self.transmission > 0.0 {
             shader_defs.push("TRANSMISSION");
         }
 
-        if self.transmission > 0.0 {
+        if self.transmission > 0.0 || self.subsurface {
             shader_defs.push("THICKNESS");
         }
 

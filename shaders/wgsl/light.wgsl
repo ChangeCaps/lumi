@@ -25,6 +25,7 @@ struct Light {
 	color: vec3<f32>,
 	intensity: f32,
 	l: vec3<f32>,
+	occlusion: f32,
 	attenuation: f32,
 }
 

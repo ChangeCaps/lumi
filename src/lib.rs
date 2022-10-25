@@ -5,6 +5,8 @@
 pub use lumi_assets as assets;
 pub use lumi_bake as bake;
 pub use lumi_core as core;
+#[cfg(feature = "gltf")]
+pub use lumi_gltf as gltf;
 pub use lumi_id as id;
 #[cfg(feature = "material")]
 pub use lumi_material as material;
@@ -53,5 +55,8 @@ impl RenderPlugin for DefaultPlugin {
             .add_plugin(PostProcessPlugin)
             .add_plugin(MaterialPlugin::default())
             .add_asset_loader(core::ImageLoader);
+
+        #[cfg(feature = "gltf")]
+        builder.add_asset_loader(gltf::GltfLoader);
     }
 }

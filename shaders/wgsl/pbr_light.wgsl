@@ -134,6 +134,8 @@ fn light_surface(
 	color += clearcoat;
 #endif
 
+	color *= light.occlusion;
+
 #ifdef SUBSURFACE
 	let scatter_voh = saturate(dot(pixel.v, -light.l));
 	let forward_scatter = exp2(scatter_voh * pixel.subsurface_power - pixel.subsurface_power);
@@ -162,18 +164,27 @@ fn point_light(
 	light.intensity = point_light.intensity;
 	light.l = normalize(light_to_frag);
 	light.attenuation = range_attenuation;
+	light.occlusion = 1.0;
 	return light_surface(pixel, light);
 }
 
 fn directional_light(
-	directionl_light: DirectionalLight,
+	directional_light: DirectionalLight,
 	pixel: PbrPixel,
 ) -> vec3<f32> {
+	var shadow: Shadow;
+	shadow.position = pixel.position;
+	shadow.normal = pixel.n;
+	shadow.frag_coord = pixel.frag_coord;
+
+	let shadow = directional_shadow(directional_light, shadow, directional_light.view_proj, directional_light.cascade);
+
 	var light: Light;
-	light.color = directionl_light.color;
-	light.intensity = directionl_light.intensity;
-	light.l = -directionl_light.direction;
+	light.color = directional_light.color;
+	light.intensity = directional_light.intensity;
+	light.l = -directional_light.direction;
 	light.attenuation = 1.0;
+	light.occlusion = shadow;
 	return light_surface(pixel, light);
 }
 
@@ -186,16 +197,8 @@ fn pbr_lights(
 		color += point_light(point_lights[i], pixel);
 	}
 
-	for (var i = 0u; i < directional_light_count; i = i + 1u) {
-		let light = directional_lights[i];
-
-		var shadow: Shadow;
-		shadow.position = pixel.position;
-		shadow.normal = pixel.n;
-		shadow.frag_coord = pixel.frag_coord;
-
-		let shadow = directional_shadow(light, shadow, light.view_proj, light.cascade);
-		color += directional_light(light, pixel) * shadow;
+	for (var i = 0u; i < directional_light_count; i = i + 1u) {	
+		color += directional_light(directional_lights[i], pixel);
 	}
 
 	return color;

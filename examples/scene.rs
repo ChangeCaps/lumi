@@ -3,6 +3,7 @@ mod util;
 use std::time::Instant;
 
 use lumi::prelude::*;
+use lumi_assets::Handle;
 use util::{App, CameraController};
 use winit::event::Event;
 
@@ -17,7 +18,7 @@ impl App for Scene {
     fn init(world: &mut World, renderer: &mut Renderer) -> Self {
         renderer.settings_mut().render_sky = true;
 
-        let scene = MeshNode::open_gltf("examples/assets/scene.glb").unwrap();
+        let scene: Handle<MeshNode> = renderer.asset_server().load("examples/assets/scene.glb");
         world.add(scene);
 
         *world.environment_mut() = Environment::open("env.hdr").unwrap();
