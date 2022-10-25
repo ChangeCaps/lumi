@@ -24,9 +24,9 @@ pub use tone_mapping::*;
 pub use view_phase::*;
 pub use world::*;
 
-use std::any::TypeId;
+use std::{any::TypeId, path::Path};
 
-use lumi_assets::{AssetLoader, AssetServer, AssetServerBuilder};
+use lumi_assets::{Asset, AssetLoader, AssetServer, AssetServerBuilder, Handle};
 use lumi_bounds::{BoundingShape, CameraFrustum, Frustum};
 use lumi_core::{CommandEncoder, Device, Queue, RenderTarget, Resources, SharedBuffer};
 use lumi_id::IdMap;
@@ -298,6 +298,11 @@ impl Renderer {
     #[track_caller]
     pub fn asset_server(&self) -> &AssetServer {
         self.resources.get().unwrap()
+    }
+
+    #[track_caller]
+    pub fn load<T: Asset>(&self, path: impl AsRef<Path>) -> Handle<T> {
+        self.asset_server().load(path)
     }
 
     #[inline]

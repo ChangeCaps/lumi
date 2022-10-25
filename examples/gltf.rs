@@ -13,13 +13,8 @@ struct GltfViewer {
 }
 
 impl App for GltfViewer {
-    fn init(world: &mut World, renderer: &mut Renderer) -> Self {
-        let gltf = renderer
-            .asset_server()
-            .load::<MeshNode>("examples/assets/suzanne.glb");
-
-        let model = gltf.wait().clone();
-
+    fn init(world: &mut World, _renderer: &mut Renderer) -> Self {
+        let model = MeshNode::open_gltf("examples/assets/suzanne.glb").unwrap();
         let model = world.add(model);
 
         *world.environment_mut() = Environment::open("env.hdr").unwrap();
@@ -135,7 +130,9 @@ impl App for GltfViewer {
             });
         });
 
-        world.node_mut::<MeshNode>(self.model).primitives[0].material = self.material.clone();
+        for primitive in world.node_mut::<MeshNode>(self.model).primitives.iter_mut() {
+            primitive.material = self.material.clone();
+        }
 
         egui::Window::new("Information").show(ctx, |ui| {
             self.fps_counter.update();

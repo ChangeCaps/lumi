@@ -1,6 +1,9 @@
+use std::path::Path;
+
 use lumi_core::{FilterMode, Image, ImageData, MaybeHandle, TextureFormat};
 use lumi_material::{MeshNode, Primitive, StandardMaterial};
 use lumi_mesh::Mesh;
+use lumi_util::math::Mat4;
 
 fn wrapping_to_address(mode: gltf::texture::WrappingMode) -> lumi_core::AddressMode {
     match mode {
@@ -10,8 +13,8 @@ fn wrapping_to_address(mode: gltf::texture::WrappingMode) -> lumi_core::AddressM
     }
 }
 
-#[derive(Default)]
 pub struct GltfData {
+    pub document: gltf::Document,
     pub textures: Vec<MaybeHandle<Image>>,
     pub materials: Vec<StandardMaterial>,
     pub meshes: Vec<MeshNode>,
@@ -19,28 +22,71 @@ pub struct GltfData {
 
 impl GltfData {
     pub fn new(
-        document: &gltf::Document,
+        document: gltf::Document,
         buffer_data: &[gltf::buffer::Data],
         image_data: &[gltf::image::Data],
     ) -> Self {
-        let mut this = Self::default();
+        let mut this = Self {
+            document,
+            textures: Vec::new(),
+            materials: Vec::new(),
+            meshes: Vec::new(),
+        };
 
-        for texture in document.textures() {
+        for texture in this.document.textures() {
             let texture = Self::load_texture(texture, image_data);
             this.textures.push(texture);
         }
 
-        for material in document.materials() {
+        for material in this.document.materials() {
             let material = Self::load_material(material, &this.textures);
             this.materials.push(material);
         }
 
-        for mesh in document.meshes() {
+        for mesh in this.document.meshes() {
             let mesh = this.load_mesh(mesh, buffer_data);
             this.meshes.push(mesh);
         }
 
         this
+    }
+
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, gltf::Error> {
+        let (document, buffers, images) = gltf::import(path)?;
+
+        Ok(Self::new(document, &buffers, &images))
+    }
+
+    pub fn create_mesh_node(&self) -> MeshNode {
+        let mut mesh_node = MeshNode::default();
+
+        if let Some(scene) = self.document.default_scene() {
+            for node in scene.nodes() {
+                self.append_mesh_node(&mut mesh_node, node, Mat4::IDENTITY);
+            }
+        }
+
+        mesh_node
+    }
+
+    fn append_mesh_node(&self, mesh_node: &mut MeshNode, node: gltf::Node, global_transform: Mat4) {
+        let transform = global_transform * Mat4::from_cols_array_2d(&node.transform().matrix());
+
+        if let Some(mesh) = node.mesh() {
+            let mesh = &self.meshes[mesh.index()];
+            let transform = transform * mesh.transform;
+
+            for primitive in mesh.primitives.iter() {
+                let mut mesh = primitive.mesh.clone();
+                mesh.transform(transform);
+
+                mesh_node.add_primitive(primitive.material.clone(), mesh);
+            }
+        }
+
+        for child in node.children() {
+            self.append_mesh_node(mesh_node, child, transform);
+        }
     }
 
     fn load_texture(texture: gltf::Texture, data: &[gltf::image::Data]) -> MaybeHandle<Image> {

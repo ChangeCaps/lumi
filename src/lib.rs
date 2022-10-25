@@ -25,6 +25,8 @@ pub mod prelude {
     pub use crate::DefaultPlugin;
     pub use lumi_bind::Bind;
     pub use lumi_core::{Image, ImageData, StorageBuffer, UniformBuffer};
+    #[cfg(feature = "gltf")]
+    pub use lumi_gltf::OpenGltfExt;
     pub use lumi_macro::*;
     pub use lumi_material::{Material, MeshNode, Primitive, StandardMaterial};
     pub use lumi_mesh::{shape, Mesh, MeshId};
