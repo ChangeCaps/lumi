@@ -63,10 +63,8 @@ impl App for Spheres {
             ..Default::default()
         });
 
-        let asset_server = renderer.asset_server();
-
         let material = StandardMaterial {
-            base_color_texture: Some(asset_server.load("examples/assets/texture.png")),
+            base_color_texture: Some(Image::open_srgb("examples/assets/texture.png").unwrap()),
             ..Default::default()
         };
 
