@@ -100,7 +100,7 @@ impl TaskPool {
                 let thread_name = if let Some(thread_name) = thread_name {
                     format!("{}({})", thread_name, i)
                 } else {
-                    format!("Lumi TaskPool({})", i)
+                    format!("TaskPool({})", i)
                 };
 
                 let mut thread_builder = std::thread::Builder::new().name(thread_name);
@@ -130,6 +130,7 @@ impl TaskPool {
         self.inner.threads.len()
     }
 
+    /// Spawns a task in the thread pool.
     #[inline]
     pub fn spawn<T>(&self, future: impl Future<Output = T> + Send + 'static) -> Task<T>
     where
@@ -138,6 +139,7 @@ impl TaskPool {
         Task::new(self.executor.spawn(future))
     }
 
+    /// Spawns a task in the thread local executor.
     #[inline]
     pub fn spawn_local<T>(&self, future: impl Future<Output = T> + Send + 'static) -> Task<T>
     where
