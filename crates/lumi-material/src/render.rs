@@ -184,6 +184,10 @@ impl MaterialRenderFunction {
             resources.insert_id(id.cast(), states);
             resources.insert_id(id.cast(), transform);
         }
+
+        for id in context.changes.removed() {
+            resources.remove_id::<MaterialStates>(id);
+        }
     }
 
     fn render_mesh_node<T, U>(
