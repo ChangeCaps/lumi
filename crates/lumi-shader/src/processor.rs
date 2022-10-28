@@ -1,10 +1,11 @@
 use std::{
     collections::VecDeque,
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, UNIX_EPOCH},
 };
 
-use lumi_assets::AssetIo;
 use lumi_util::{HashMap, HashSet};
 
 use crate::{DefaultShader, Shader, ShaderDefHash, ShaderDefs, ShaderError, ShaderRef};
@@ -225,14 +226,45 @@ struct ShaderCacheKey {
     defs: ShaderDefs,
 }
 
+pub trait ShaderIo: Send + Sync + 'static {
+    fn read(&self, path: &Path) -> Result<String, ShaderError>;
+
+    fn last_modified(&self, _path: &Path) -> Option<Duration> {
+        None
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FileShaderIo {
+    pub root: PathBuf,
+}
+
+impl FileShaderIo {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+}
+
+impl ShaderIo for FileShaderIo {
+    fn read(&self, path: &Path) -> Result<String, ShaderError> {
+        Ok(fs::read_to_string(path)?)
+    }
+
+    fn last_modified(&self, path: &Path) -> Option<Duration> {
+        let meta = fs::metadata(path).ok()?;
+        let modified = meta.modified().ok()?;
+        Some(modified.duration_since(UNIX_EPOCH).ok()?)
+    }
+}
+
 pub struct ShaderProcessor {
     modules: HashMap<String, String>,
     cache: HashMap<ShaderCacheKey, CachedShader>,
-    io: Arc<dyn AssetIo>,
+    io: Arc<dyn ShaderIo>,
 }
 
 impl ShaderProcessor {
-    pub fn empty(io: Arc<dyn AssetIo>) -> Self {
+    pub fn empty(io: Arc<dyn ShaderIo>) -> Self {
         Self {
             modules: HashMap::default(),
             cache: HashMap::default(),
@@ -240,7 +272,7 @@ impl ShaderProcessor {
         }
     }
 
-    pub fn new(io: Arc<dyn AssetIo>) -> Self {
+    pub fn new(io: Arc<dyn ShaderIo>) -> Self {
         let mut this = Self::empty(io);
         this.add_default_modules();
         this
@@ -313,7 +345,7 @@ impl ShaderProcessor {
                 }
             },
             ShaderRef::Path(path) => {
-                let source = self.io.read_to_string_blocking(path.as_ref())?;
+                let source = self.io.read(path.as_ref())?;
                 Ok(source)
             }
             ShaderRef::Module(module) => self

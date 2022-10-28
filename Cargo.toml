@@ -18,27 +18,24 @@ futures-lite = "1.12"
 winit = "0.27"
 
 [dependencies]
-lumi-assets = { path = "crates/lumi-assets", version = "0.1.0" }
 lumi-bake = { path = "crates/lumi-bake", version = "0.1.0" }
 lumi-bind = { path = "crates/lumi-bind", version = "0.1.0" }
-lumi-core = { path = "crates/lumi-core", version = "0.1.0", default-features = false, features = ["image"] }
+lumi-core = { path = "crates/lumi-core", version = "0.1.0", features = ["image"] }
 lumi-gltf = { path = "crates/lumi-gltf", version = "0.1.0", optional = true }
 lumi-id = { path = "crates/lumi-id", version = "0.1.0" }
 lumi-macro = { path = "crates/lumi-macro", version = "0.1.0" }
-lumi-material = { path = "crates/lumi-material", version = "0.1.0", default-features = false, optional = true }
+lumi-material = { path = "crates/lumi-material", version = "0.1.0", optional = true }
 lumi-mesh = { path = "crates/lumi-mesh", version = "0.1.0" }
 lumi-renderer = { path = "crates/lumi-renderer", version = "0.1.0" }
 lumi-shader = { path = "crates/lumi-shader", version = "0.1.0" }
-lumi-task = { path = "crates/lumi-task", version = "0.1.0" }
 lumi-util = { path = "crates/lumi-util", version = "0.1.0" }
 lumi-world = { path = "crates/lumi-world", version = "0.1.0" }
 
 tracing-log = "0.1"
 
 [features]
-default = ["material", "assets", "gltf"]
+default = ["material", "gltf"]
 material = ["lumi-material"]
-assets = ["lumi-core/assets"]
 gltf = ["lumi-gltf"]
 
 [[bench]]

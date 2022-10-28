@@ -4,15 +4,17 @@ mod mesh_node;
 mod prepare;
 mod render;
 mod standard;
+mod unlit;
 
 pub use draw::*;
-use lumi_core::Device;
 pub use material::*;
 pub use mesh_node::*;
 pub use prepare::*;
 pub use render::*;
 pub use standard::*;
+pub use unlit::*;
 
+use lumi_core::Device;
 use lumi_renderer::{
     CorePhase, MipChainPipeline, PhaseLabel, RenderPlugin, Renderer, RendererBuilder,
 };

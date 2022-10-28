@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use lumi_core::{FilterMode, Image, ImageData, MaybeHandle, TextureFormat};
+use lumi_core::{FilterMode, Image, ImageData, TextureFormat};
 use lumi_material::{MeshNode, Primitive, StandardMaterial};
 use lumi_mesh::Mesh;
 use lumi_util::math::Mat4;
@@ -15,7 +15,7 @@ fn wrapping_to_address(mode: gltf::texture::WrappingMode) -> lumi_core::AddressM
 
 pub struct GltfData {
     pub document: gltf::Document,
-    pub textures: Vec<MaybeHandle<Image>>,
+    pub textures: Vec<Image>,
     pub materials: Vec<StandardMaterial>,
     pub meshes: Vec<MeshNode>,
 }
@@ -89,7 +89,7 @@ impl GltfData {
         }
     }
 
-    fn load_texture(texture: gltf::Texture, data: &[gltf::image::Data]) -> MaybeHandle<Image> {
+    fn load_texture(texture: gltf::Texture, data: &[gltf::image::Data]) -> Image {
         let image = texture.source();
         let data = &data[image.index()];
         let mut pixels = data.pixels.clone();
@@ -149,10 +149,7 @@ impl GltfData {
         image.into()
     }
 
-    fn load_material(
-        material: gltf::Material,
-        textures: &[MaybeHandle<Image>],
-    ) -> StandardMaterial {
+    fn load_material(material: gltf::Material, textures: &[Image]) -> StandardMaterial {
         let mut standard = StandardMaterial::default();
 
         let pbr = material.pbr_metallic_roughness();

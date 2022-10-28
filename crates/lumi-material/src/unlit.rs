@@ -1,12 +1,10 @@
-use glam::Vec3;
-use lumi_macro::Bind;
-use wgpu::VertexFormat;
+use lumi_bind::Bind;
+use lumi_core::VertexFormat;
+use lumi_mesh::Mesh;
+use lumi_shader::ShaderRef;
+use lumi_util::math::Vec3;
 
-use crate::{
-    material::{Material, MaterialPipeline, MeshVertexLayout},
-    mesh::Mesh,
-    shader::ShaderRef,
-};
+use crate::{Material, MaterialPipeline, MeshVertexLayout};
 
 #[derive(Clone, Copy, Debug, Bind)]
 pub struct UnlitMaterial {

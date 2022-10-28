@@ -1,3 +1,4 @@
+use futures_lite::future;
 use lumi_core::{
     Backends, Device, DeviceDescriptor, Features, Instance, Limits, PowerPreference, Queue,
     RequestAdapterOptions, RequestDeviceError,
@@ -37,7 +38,7 @@ impl BakeInstance {
     }
 
     pub fn new() -> Result<Self, BakeInstanceError> {
-        lumi_task::block_on(Self::new_async())
+        future::block_on(Self::new_async())
     }
 
     pub fn device(&self) -> &Device {

@@ -24,14 +24,13 @@ pub use tone_mapping::*;
 pub use view_phase::*;
 pub use world::*;
 
-use std::{any::TypeId, path::Path};
+use std::{any::TypeId, sync::Arc};
 
-use lumi_assets::{Asset, AssetLoader, AssetServer, AssetServerBuilder, Handle};
+use hyena::TaskPool;
 use lumi_bounds::{BoundingShape, CameraFrustum, Frustum};
 use lumi_core::{CommandEncoder, Device, Queue, RenderTarget, Resources, SharedBuffer};
 use lumi_id::IdMap;
-use lumi_shader::ShaderProcessor;
-use lumi_task::TaskPool;
+use lumi_shader::{FileShaderIo, ShaderProcessor};
 use lumi_util::{math::Mat4, HashSet};
 use lumi_world::{CameraId, CameraTarget, RawCamera, World, WorldChange, WorldChanges};
 
@@ -83,7 +82,6 @@ impl View {
 
 #[derive(Default)]
 pub struct RendererBuilder {
-    pub asset_server: AssetServerBuilder,
     task_pool: Option<TaskPool>,
     phases: RenderPhases,
     view_phases: RenderViewPhases,
@@ -100,11 +98,6 @@ impl RendererBuilder {
     pub fn add_plugin<T: RenderPlugin + 'static>(&mut self, plugin: T) -> &mut Self {
         plugin.build(self);
         self.plugins.push(Box::new(plugin));
-        self
-    }
-
-    pub fn add_asset_loader<T: AssetLoader>(&mut self, loader: T) -> &mut Self {
-        self.asset_server.add_loader(loader);
         self
     }
 
@@ -202,20 +195,15 @@ impl Renderer {
         RendererBuilder::new().build(device)
     }
 
-    fn new_internal(mut builder: RendererBuilder, device: &Device) -> Self {
+    fn new_internal(builder: RendererBuilder, device: &Device) -> Self {
         let task_pool = builder
             .task_pool
             .unwrap_or_else(|| TaskPool::new().expect("Failed to create task pool"));
 
-        if !builder.asset_server.has_task_pool() {
-            builder.asset_server.set_task_pool(task_pool.clone());
-        }
-
-        let asset_server = builder.asset_server.build();
-
         let settings = RenderSettings::default();
 
-        let mut shader_processor = ShaderProcessor::new(asset_server.io().clone());
+        let shader_io = FileShaderIo::new(".");
+        let mut shader_processor = ShaderProcessor::new(Arc::new(shader_io));
 
         let tone_mapping = ToneMapping::new(device, &mut shader_processor);
 
@@ -223,7 +211,6 @@ impl Renderer {
         resources.insert(task_pool);
         resources.insert(settings);
         resources.insert(shader_processor);
-        resources.insert(asset_server);
 
         let mut renderer = Self {
             resources,
@@ -293,16 +280,6 @@ impl Renderer {
     #[track_caller]
     pub fn settings_mut(&mut self) -> &mut RenderSettings {
         self.resources.get_mut().unwrap()
-    }
-
-    #[track_caller]
-    pub fn asset_server(&self) -> &AssetServer {
-        self.resources.get().unwrap()
-    }
-
-    #[track_caller]
-    pub fn load<T: Asset>(&self, path: impl AsRef<Path>) -> Handle<T> {
-        self.asset_server().load(path)
     }
 
     #[inline]

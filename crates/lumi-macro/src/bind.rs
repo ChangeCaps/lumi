@@ -5,9 +5,9 @@ use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     custom_keyword,
     parse::{Parse, ParseStream},
-    parse_macro_input,
+    parse_macro_input, parse_quote,
     spanned::Spanned,
-    Attribute, Data, DeriveInput, Error, LitStr, Path, Token,
+    Attribute, Data, DeriveInput, Error, LitStr, Path, Token, WherePredicate,
 };
 
 use crate::get_lumi;
@@ -434,17 +434,31 @@ impl AttributeInfo {
 }
 
 pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+    let mut input = parse_macro_input!(input as DeriveInput);
     let lumi_core = get_lumi("core");
     let lumi_bind = get_lumi("bind");
 
     let ident = input.ident;
     let type_attr = TypeAttribute::new(&input.attrs);
 
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let trait_bounds = trait_bounds(&input.data, &lumi_core);
     let entries_impl = impl_entries(&input.data, &type_attr, &lumi_core);
     let bind_key_impl = impl_bind_key(&input.data, &type_attr, &lumi_core);
     let bind_impl = impl_bind(&input.data, &type_attr, &lumi_core);
+
+    let where_clause = input.generics.make_where_clause();
+
+    if let Some((path, _)) = type_attr.uniform {
+        where_clause
+            .predicates
+            .push(parse_quote! {#path: for<'a> ::std::convert::From<&'a Self>});
+    }
+
+    for bound in trait_bounds {
+        where_clause.predicates.push(bound);
+    }
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let expanded = quote! {
         #[automatically_derived]
@@ -472,6 +486,28 @@ pub fn derive_bind(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
 
     expanded.into()
+}
+
+fn trait_bounds(data: &Data, lumi_core: &syn::Path) -> Vec<WherePredicate> {
+    match data {
+        Data::Struct(data) => data
+            .fields
+            .iter()
+            .flat_map(|field| {
+                let ty = &field.ty;
+
+                let attr = AttributeInfo::new(&field.attrs).unwrap();
+
+                attr.bindings
+                    .iter()
+                    .map(move |(binding_type, _)| {
+                        parse_quote! { #ty: #lumi_core::#binding_type }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect(),
+        _ => unimplemented!("Bind must be derived for structs"),
+    }
 }
 
 fn impl_entries(data: &Data, type_attr: &TypeAttribute, lumi_core: &syn::Path) -> TokenStream {

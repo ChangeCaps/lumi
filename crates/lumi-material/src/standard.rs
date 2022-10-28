@@ -1,6 +1,5 @@
 use lumi_bind::Bind;
 use lumi_core::Image;
-use lumi_core::MaybeHandle;
 use lumi_macro::ShaderType;
 use lumi_shader::{ShaderDefs, ShaderRef};
 use lumi_util::math::{Vec3, Vec4};
@@ -9,22 +8,22 @@ use crate::Material;
 
 #[derive(Clone, Debug, Bind)]
 #[uniform(RawStandardMaterial = "standard_material")]
-pub struct StandardMaterial {
+pub struct StandardMaterial<T = Image> {
     #[texture]
     #[sampler(name = "base_color_sampler")]
-    pub base_color_texture: Option<MaybeHandle<Image>>,
+    pub base_color_texture: Option<T>,
     #[texture]
     #[sampler(name = "metallic_roughness_sampler")]
-    pub metallic_roughness_texture: Option<MaybeHandle<Image>>,
+    pub metallic_roughness_texture: Option<T>,
     #[texture]
     #[sampler(name = "normal_map_sampler")]
-    pub normal_map: Option<MaybeHandle<Image>>,
+    pub normal_map: Option<T>,
     #[texture]
     #[sampler(name = "clearcoat_normal_map_sampler")]
-    pub clearcoat_normal_map: Option<MaybeHandle<Image>>,
+    pub clearcoat_normal_map: Option<T>,
     #[texture]
     #[sampler(name = "emissive_map_sampler")]
-    pub emissive_map: Option<MaybeHandle<Image>>,
+    pub emissive_map: Option<T>,
     pub base_color: Vec4,
     pub alpha_cutoff: f32,
     pub metallic: f32,

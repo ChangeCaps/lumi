@@ -3,10 +3,10 @@ mod processor;
 
 use std::{
     borrow::Cow,
+    io,
     path::{Path, PathBuf},
 };
 
-use lumi_assets::AssetIoError;
 use lumi_core::{Device, ShaderModule, ShaderModuleDescriptor, ShaderSource};
 use lumi_util::{thiserror, HashMap};
 use naga::valid::{Capabilities, ValidationFlags, Validator};
@@ -194,5 +194,5 @@ pub enum ShaderError {
     #[error("Circular include {0:?}")]
     CircularInclude(ShaderRef),
     #[error("IO error: {0}")]
-    IoError(#[from] AssetIoError),
+    IoError(#[from] io::Error),
 }

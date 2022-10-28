@@ -2,7 +2,6 @@
 #![doc(html_favicon_url = "https://i.imgur.com/XTQGS8H.png")]
 #![doc(html_logo_url = "https://i.imgur.com/XTQGS8H.png")]
 
-pub use lumi_assets as assets;
 pub use lumi_bake as bake;
 pub use lumi_core as core;
 #[cfg(feature = "gltf")]
@@ -13,7 +12,6 @@ pub use lumi_material as material;
 pub use lumi_mesh as mesh;
 pub use lumi_renderer as renderer;
 pub use lumi_shader as shader;
-pub use lumi_task as task;
 pub use lumi_util as util;
 pub use lumi_world as world;
 
@@ -55,10 +53,6 @@ impl RenderPlugin for DefaultPlugin {
             .add_plugin(PreparePlugin)
             .add_plugin(SkyPlugin)
             .add_plugin(PostProcessPlugin)
-            .add_plugin(MaterialPlugin::default())
-            .add_asset_loader(core::ImageLoader);
-
-        #[cfg(feature = "gltf")]
-        builder.add_asset_loader(gltf::GltfLoader);
+            .add_plugin(MaterialPlugin::default());
     }
 }

@@ -19,9 +19,6 @@ mod texture;
 mod texture_binding;
 mod uniform_binding;
 
-#[cfg(feature = "assets")]
-mod handle_bindings;
-
 pub use self::image::*;
 pub use bind_group::*;
 pub use bind_key::*;
@@ -42,11 +39,6 @@ pub use texture_binding::*;
 pub use uniform_binding::*;
 
 pub use wgpu::{util::BufferInitDescriptor, *};
-
-#[cfg(feature = "assets")]
-pub type MaybeHandle<T> = lumi_assets::Handle<T>;
-#[cfg(not(feature = "assets"))]
-pub type MaybeHandle<T> = T;
 
 #[doc(hidden)]
 pub use encase;

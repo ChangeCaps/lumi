@@ -1,5 +1,3 @@
-use lumi_assets::{Asset, Handle};
-
 pub trait Extract<T> {
     fn extract(&self, extract: &mut dyn FnMut(&T));
 
@@ -24,33 +22,4 @@ impl<T> Extract<T> for [T] {
 
 pub trait ExtractOne<T> {
     fn extract_one(&self) -> Option<&T>;
-}
-
-impl<T, U> Extract<U> for Handle<T>
-where
-    T: Extract<U> + Asset,
-{
-    #[inline]
-    fn extract(&self, extract: &mut dyn FnMut(&U)) {
-        if let Some(asset) = self.get() {
-            asset.extract(extract);
-        }
-    }
-
-    #[inline]
-    fn extract_enumerated(&self, extract: &mut dyn FnMut(usize, &U)) {
-        if let Some(asset) = self.get() {
-            asset.extract_enumerated(extract);
-        }
-    }
-}
-
-impl<T, U> ExtractOne<U> for Handle<T>
-where
-    T: ExtractOne<U> + Asset,
-{
-    #[inline]
-    fn extract_one(&self) -> Option<&U> {
-        self.get()?.extract_one()
-    }
 }

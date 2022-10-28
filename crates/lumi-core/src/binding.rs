@@ -68,7 +68,7 @@ impl BindLayoutEntry {
 }
 
 pub trait UniformBinding {
-    type State: Any + Default;
+    type State: Any + Default + Send + Sync;
 
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
@@ -92,7 +92,7 @@ pub trait UniformBinding {
 }
 
 pub trait StorageBinding {
-    type State: Any + Default;
+    type State: Any + Default + Send + Sync;
 
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
@@ -116,7 +116,7 @@ pub trait StorageBinding {
 }
 
 pub trait TextureBinding {
-    type State: Any + Default;
+    type State: Any + Default + Send + Sync;
 
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
@@ -140,7 +140,7 @@ pub trait TextureBinding {
 }
 
 pub trait StorageTextureBinding {
-    type State: Any + Default;
+    type State: Any + Default + Send + Sync;
 
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
@@ -164,7 +164,7 @@ pub trait StorageTextureBinding {
 }
 
 pub trait SamplerBinding {
-    type State: Any + Default;
+    type State: Any + Default + Send + Sync;
 
     fn entry() -> BindLayoutEntry {
         BindLayoutEntry {
