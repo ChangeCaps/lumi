@@ -12,7 +12,7 @@ pub use primitive::*;
 pub use standard::*;
 pub use unlit::*;
 
-use lumi_renderer::{ExtractStage, RenderStage, RenderSystem, Renderer, RendererPlugin};
+use lumi_renderer::{ExtractStage, Renderer, RendererPlugin, ViewStage, ViewSystem};
 use shiv::schedule::{IntoSystemDescriptor, SystemLabel};
 
 use std::marker::PhantomData;
@@ -46,16 +46,16 @@ impl<T: ExtractMaterials> RendererPlugin for ExtractMaterialPlugin<T> {
         );
 
         renderer
-            .render
+            .view
             .add_system_to_stage(
-                RenderStage::Prepare,
+                ViewStage::Prepare,
                 prepare_material_system::<T>
                     .label(MaterialSystem::Prepare)
-                    .after(RenderSystem::ScreenSpaceResize)
-                    .after(RenderSystem::PrepareCamera),
+                    .after(ViewSystem::ScreenSpaceResize)
+                    .after(ViewSystem::PrepareCamera),
             )
             .add_system_to_stage(
-                RenderStage::Draw,
+                ViewStage::Draw,
                 draw_material_system::<T>.label(MaterialSystem::Draw),
             );
     }
@@ -78,8 +78,8 @@ impl<T: Material> RendererPlugin for MaterialPlugin<T> {
     fn build(&self, renderer: &mut Renderer) {
         renderer.world.init_resource::<PreparedMaterialPipelines>();
 
-        renderer.render.add_system_to_stage(
-            RenderStage::Prepare,
+        renderer.view.add_system_to_stage(
+            ViewStage::Prepare,
             update_bindings_system
                 .label(MaterialSystem::Bindings)
                 .after(MaterialSystem::Prepare),

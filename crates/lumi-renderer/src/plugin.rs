@@ -23,7 +23,7 @@ pub enum ExtractStage {
 }
 
 #[derive(StageLabel)]
-pub enum RenderStage {
+pub enum ViewStage {
     /// Before preparation.
     PrePrepare,
     /// Prepare for rendering.
@@ -51,7 +51,7 @@ pub enum RenderStage {
 }
 
 #[derive(SystemLabel)]
-pub enum RenderSystem {
+pub enum ViewSystem {
     ClearDraw,
     Draw,
     PrepareCamera,
@@ -87,19 +87,19 @@ impl RendererPlugin for CorePlugin {
             .add_stage(ExtractStage::Prepare, SystemStage::parallel());
 
         renderer
-            .render
-            .add_stage(RenderStage::PrePrepare, SystemStage::parallel())
-            .add_stage(RenderStage::Prepare, SystemStage::parallel())
-            .add_stage(RenderStage::PostPrepare, SystemStage::parallel())
-            .add_stage(RenderStage::Draw, SystemStage::parallel())
-            .add_stage(RenderStage::Clear, SystemStage::parallel())
-            .add_stage(RenderStage::PreRender, SystemStage::parallel())
-            .add_stage(RenderStage::PrepareOpaque, SystemStage::parallel())
-            .add_stage(RenderStage::RenderOpaque, SystemStage::parallel())
-            .add_stage(RenderStage::PrepareTransparent, SystemStage::parallel())
-            .add_stage(RenderStage::RenderTransparent, SystemStage::parallel())
-            .add_stage(RenderStage::PostRender, SystemStage::parallel())
-            .add_stage(RenderStage::ToneMapping, SystemStage::parallel());
+            .view
+            .add_stage(ViewStage::PrePrepare, SystemStage::parallel())
+            .add_stage(ViewStage::Prepare, SystemStage::parallel())
+            .add_stage(ViewStage::PostPrepare, SystemStage::parallel())
+            .add_stage(ViewStage::Draw, SystemStage::parallel())
+            .add_stage(ViewStage::Clear, SystemStage::parallel())
+            .add_stage(ViewStage::PreRender, SystemStage::parallel())
+            .add_stage(ViewStage::PrepareOpaque, SystemStage::parallel())
+            .add_stage(ViewStage::RenderOpaque, SystemStage::parallel())
+            .add_stage(ViewStage::PrepareTransparent, SystemStage::parallel())
+            .add_stage(ViewStage::RenderTransparent, SystemStage::parallel())
+            .add_stage(ViewStage::PostRender, SystemStage::parallel())
+            .add_stage(ViewStage::ToneMapping, SystemStage::parallel());
 
         renderer
             .extract
@@ -108,43 +108,43 @@ impl RendererPlugin for CorePlugin {
             .add_system_to_stage(ExtractStage::Extract, extract_bloom_settings_system);
 
         renderer
-            .render
+            .view
             .add_system_to_stage(
-                RenderStage::PrePrepare,
-                clear_draws_system.label(RenderSystem::ClearDraw),
+                ViewStage::PrePrepare,
+                clear_draws_system.label(ViewSystem::ClearDraw),
             )
             .add_system_to_stage(
-                RenderStage::PrePrepare,
-                prepare_camera_system.label(RenderSystem::PrepareCamera),
+                ViewStage::PrePrepare,
+                prepare_camera_system.label(ViewSystem::PrepareCamera),
             )
             .add_system_to_stage(
-                RenderStage::PrePrepare,
-                screen_space_resize_system.label(RenderSystem::ScreenSpaceResize),
+                ViewStage::PrePrepare,
+                screen_space_resize_system.label(ViewSystem::ScreenSpaceResize),
             )
             .add_system_to_stage(
-                RenderStage::Clear,
-                sky_render_system.label(RenderSystem::RenderSky),
+                ViewStage::Clear,
+                sky_render_system.label(ViewSystem::RenderSky),
             )
-            .add_system_to_stage(RenderStage::PreRender, draw_system)
+            .add_system_to_stage(ViewStage::PreRender, draw_system)
             .add_system_to_stage(
-                RenderStage::RenderOpaque,
-                render_opaque_system.label(RenderSystem::RenderOpaque),
-            )
-            .add_system_to_stage(
-                RenderStage::PrepareTransparent,
-                screen_space_render_system.label(RenderSystem::ScreenSpaceRender),
+                ViewStage::RenderOpaque,
+                render_opaque_system.label(ViewSystem::RenderOpaque),
             )
             .add_system_to_stage(
-                RenderStage::RenderTransparent,
-                render_transparent_system.label(RenderSystem::RenderTransparent),
+                ViewStage::PrepareTransparent,
+                screen_space_render_system.label(ViewSystem::ScreenSpaceRender),
             )
             .add_system_to_stage(
-                RenderStage::PostRender,
-                render_bloom_system.label(RenderSystem::RenderBloom),
+                ViewStage::RenderTransparent,
+                render_transparent_system.label(ViewSystem::RenderTransparent),
             )
             .add_system_to_stage(
-                RenderStage::ToneMapping,
-                tone_mapping_system.label(RenderSystem::ToneMapping),
+                ViewStage::PostRender,
+                render_bloom_system.label(ViewSystem::RenderBloom),
+            )
+            .add_system_to_stage(
+                ViewStage::ToneMapping,
+                tone_mapping_system.label(ViewSystem::ToneMapping),
             );
     }
 }

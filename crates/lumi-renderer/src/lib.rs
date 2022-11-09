@@ -65,29 +65,26 @@ pub struct Renderer {
     ///
     /// This has access to [`RenderDevice`], [`RenderQueue`], [`CommandEncoder`] and [`View`].
     /// Where [`View`] contains information about the current camera and [`FrameBuffer`].
-    pub render: Schedule,
+    pub view: Schedule,
     frame_buffers: HashMap<Entity, FrameBuffer>,
 }
 
 impl Renderer {
-    #[inline]
     pub fn new() -> Self {
         Self {
             world: World::new(),
             extract: Schedule::default(),
-            render: Schedule::default(),
+            view: Schedule::default(),
             frame_buffers: HashMap::default(),
         }
     }
 
-    #[inline]
     pub fn add_plugin(&mut self, plugin: impl RendererPlugin) -> &mut Self {
         plugin.build(self);
 
         self
     }
 
-    #[inline]
     pub fn extract(&mut self, device: &Device, queue: &Queue, world: &mut World) {
         guard!(device);
         guard!(queue);
@@ -127,7 +124,6 @@ impl Renderer {
         }
     }
 
-    #[inline]
     pub fn render(&mut self, device: &Device, queue: &Queue, target: RenderTarget) {
         self.prepare_frame_buffers(device, &target);
 
@@ -154,7 +150,7 @@ impl Renderer {
             };
 
             self.world.insert_resource(view);
-            self.render.run_once(&mut self.world);
+            self.view.run_once(&mut self.world);
             self.world.remove_resource::<View>();
         }
 
