@@ -1,53 +1,81 @@
+mod camera;
 mod environment;
-mod lights;
-mod meshes;
+mod light;
+mod mesh;
 mod shadow;
 mod transform;
 
+pub use camera::*;
 pub use environment::*;
-pub use lights::*;
-pub use meshes::*;
+pub use light::*;
+pub use mesh::*;
 pub use shadow::*;
 pub use transform::*;
 
-use lumi_macro::PhaseLabel;
+use lumi_mesh::Mesh;
+use shiv::schedule::{IntoSystemDescriptor, SystemLabel};
 
-use crate::{CorePhase, RenderPlugin, RendererBuilder};
+use crate::{ExtractStage, Renderer, RendererPlugin};
 
-#[derive(Clone, Copy, Debug, PhaseLabel)]
-pub enum PreparePhase {
+#[derive(SystemLabel)]
+pub enum ExtractSystem {
+    Transform,
+    Light,
+    Mesh,
+    Camera,
     Environment,
-    Lights,
-    Meshes,
-    Transforms,
     Shadow,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct PreparePlugin;
+pub struct CoreExtractPlugin;
 
-impl RenderPlugin for PreparePlugin {
-    fn build(&self, builder: &mut RendererBuilder) {
-        builder.add_phase_after(
-            CorePhase::Prepare,
-            PreparePhase::Environment,
-            PrepareEnvironment,
-        );
-        builder.add_phase_after(
-            PreparePhase::Environment,
-            PreparePhase::Lights,
-            PrepareLights,
-        );
-        builder.add_phase_after(PreparePhase::Lights, PreparePhase::Meshes, PrepareMeshes);
-        builder.add_phase_after(
-            PreparePhase::Meshes,
-            PreparePhase::Transforms,
-            PrepareTransforms,
-        );
-        builder.add_phase_after(
-            PreparePhase::Transforms,
-            PreparePhase::Shadow,
-            PrepareShadows,
-        );
+impl RendererPlugin for CoreExtractPlugin {
+    fn build(&self, renderer: &mut Renderer) {
+        renderer.world.init_resource::<PreparedLights>();
+        renderer.world.init_resource::<ShadowTargets>();
+
+        renderer
+            .extract
+            .add_system_to_stage(
+                ExtractStage::PreExtract,
+                insert_state_system.label(ExtractSystem::Shadow),
+            )
+            .add_system_to_stage(
+                ExtractStage::PreExtract,
+                clear_extracted_meshes_system.label(ExtractSystem::Mesh),
+            )
+            .add_system_to_stage(
+                ExtractStage::Extract,
+                extract_transform_system.label(ExtractSystem::Transform),
+            )
+            .add_system_to_stage(
+                ExtractStage::Extract,
+                extract_light_system.label(ExtractSystem::Light),
+            )
+            .add_system_to_stage(
+                ExtractStage::Extract,
+                extract_directional_shadow_system
+                    .label(ExtractSystem::Shadow)
+                    .after(ExtractSystem::Light),
+            )
+            .add_system_to_stage(
+                ExtractStage::Extract,
+                extract_camera_system.label(ExtractSystem::Camera),
+            )
+            .add_system_to_stage(
+                ExtractStage::Extract,
+                extract_environment_system.label(ExtractSystem::Environment),
+            )
+            .add_system_to_stage(
+                ExtractStage::Extract,
+                extract_mesh_system.label(ExtractSystem::Mesh),
+            )
+            .add_system_to_stage(
+                ExtractStage::PostExtract,
+                render_shadow_system.label(ExtractSystem::Shadow),
+            );
+
+        renderer.add_plugin(ExtractMeshPlugin::<Mesh>::default());
     }
 }

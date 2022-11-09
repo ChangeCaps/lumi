@@ -30,12 +30,19 @@ impl Hasher for IdHasher {
 
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
-        debug_assert_eq!(bytes.len(), 16);
-
-        let low = unsafe { *(bytes.as_ptr() as *const u64) };
-        let high = unsafe { *(bytes.as_ptr().add(8) as *const u64) };
-        self.write_u64(low);
-        self.write_u64(high);
+        match bytes.len() {
+            8 => {
+                let low = unsafe { *(bytes.as_ptr() as *const u64) };
+                self.write_u64(low);
+            }
+            16 => {
+                let low = unsafe { *(bytes.as_ptr() as *const u64) };
+                let high = unsafe { *(bytes.as_ptr().add(8) as *const u64) };
+                self.write_u64(low);
+                self.write_u64(high);
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[inline(always)]
@@ -101,12 +108,12 @@ impl<T: ?Sized> IdSet<T> {
     }
 
     #[inline(always)]
-    pub fn remove(&mut self, id: impl AsRef<Id<T>>) -> bool {
+    pub fn remove(&mut self, id: Id<T>) -> bool {
         self.set.remove(id.as_ref())
     }
 
     #[inline(always)]
-    pub fn contains(&self, id: impl AsRef<Id<T>>) -> bool {
+    pub fn contains(&self, id: Id<T>) -> bool {
         self.set.contains(id.as_ref())
     }
 
@@ -159,7 +166,7 @@ impl<K: ?Sized, V> IdMap<K, V> {
     }
 
     #[inline]
-    pub fn contains_id(&self, id: impl AsRef<Id<K>>) -> bool {
+    pub fn contains_id(&self, id: Id<K>) -> bool {
         self.map.contains_key(id.as_ref())
     }
 
@@ -169,12 +176,12 @@ impl<K: ?Sized, V> IdMap<K, V> {
     }
 
     #[inline(always)]
-    pub fn get(&self, id: impl AsRef<Id<K>>) -> Option<&V> {
+    pub fn get(&self, id: Id<K>) -> Option<&V> {
         self.map.get(id.as_ref())
     }
 
     #[inline(always)]
-    pub fn get_mut(&mut self, id: impl AsRef<Id<K>>) -> Option<&mut V> {
+    pub fn get_mut(&mut self, id: Id<K>) -> Option<&mut V> {
         self.map.get_mut(id.as_ref())
     }
 
@@ -192,7 +199,7 @@ impl<K: ?Sized, V> IdMap<K, V> {
     }
 
     #[inline(always)]
-    pub fn remove(&mut self, id: impl AsRef<Id<K>>) -> Option<V> {
+    pub fn remove(&mut self, id: Id<K>) -> Option<V> {
         self.map.remove(id.as_ref())
     }
 

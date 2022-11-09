@@ -1,17 +1,18 @@
 use lumi_bind::Bind;
-use lumi_core::{Device, Queue, Resources, SharedTextureView};
-use lumi_world::{Environment, EnvironmentId, World};
+use lumi_core::{Device, Queue, SharedTextureView};
+use lumi_id::Id;
+use shiv::system::{Commands, Res};
 
-use crate::{PhaseContext, RenderPhase};
+use crate::{Environment, EnvironmentId, Extract, RenderDevice, RenderQueue};
 
 #[derive(Clone, Debug, Bind)]
 pub struct PreparedEnvironment {
     pub sky: SharedTextureView,
     #[texture(name = "environment_diffuse", dimension = cube)]
     #[sampler(name = "environment_sampler")]
-    pub diffuse: SharedTextureView,
+    pub irradiance: SharedTextureView,
     #[texture(name = "environment_specular", dimension = cube)]
-    pub specular: SharedTextureView,
+    pub indirect: SharedTextureView,
     pub id: EnvironmentId,
 }
 
@@ -21,25 +22,29 @@ impl PreparedEnvironment {
 
         Self {
             sky: baked.sky_view,
-            diffuse: baked.irradiance_view,
-            specular: baked.indirect_view,
+            irradiance: baked.irradiance_view,
+            indirect: baked.indirect_view,
             id: environment.id(),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PrepareEnvironment;
+pub fn extract_environment_system(
+    mut commands: Commands,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    environment: Extract<Option<Res<Environment>>>,
+    prepared_environment: Option<Res<PreparedEnvironment>>,
+) {
+    let prepared_id = prepared_environment.map(|env| env.id);
 
-impl RenderPhase for PrepareEnvironment {
-    fn prepare(&mut self, context: &PhaseContext, world: &World, resources: &mut Resources) {
-        if let Some(prepared_environment) = resources.get::<PreparedEnvironment>() {
-            if prepared_environment.id == world.environment().id() {
-                return;
-            }
+    if let Some(environment) = environment.as_deref() {
+        if prepared_id != Some(environment.id()) {
+            commands.insert_resource(PreparedEnvironment::new(&device, &queue, &environment));
         }
+    } else if prepared_id != Some(Id::NULL) {
+        let default = Environment::default();
 
-        let prepared = PreparedEnvironment::new(context.device, context.queue, world.environment());
-        resources.insert(prepared);
+        commands.insert_resource(PreparedEnvironment::new(&device, &queue, &default));
     }
 }

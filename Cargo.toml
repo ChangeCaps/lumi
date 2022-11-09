@@ -10,12 +10,16 @@ license = "MIT OR Apache-2.0"
 members = ["crates/*"]
 
 [dev-dependencies]
-criterion = "0.3"
 egui = "0.19.0"
+egui_file = "0.3"
 egui_wgpu_backend = "0.20"
 egui_winit_platform = "0.16"
 futures-lite = "1.12"
+shiv-app = { path = "../shiv/shiv-app" }
 winit = "0.27"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-tracy = "0.10"
 
 [dependencies]
 lumi-bake = { path = "crates/lumi-bake", version = "0.1.0" }
@@ -29,7 +33,6 @@ lumi-mesh = { path = "crates/lumi-mesh", version = "0.1.0" }
 lumi-renderer = { path = "crates/lumi-renderer", version = "0.1.0" }
 lumi-shader = { path = "crates/lumi-shader", version = "0.1.0" }
 lumi-util = { path = "crates/lumi-util", version = "0.1.0" }
-lumi-world = { path = "crates/lumi-world", version = "0.1.0" }
 
 tracing-log = "0.1"
 
@@ -37,15 +40,3 @@ tracing-log = "0.1"
 default = ["material", "gltf"]
 material = ["lumi-material"]
 gltf = ["lumi-gltf"]
-
-[[bench]]
-name = "key_map"
-harness = false
-
-[[bench]]
-name = "resources"
-harness = false
-
-[[bench]]
-name = "id_map"
-harness = false

@@ -1,8 +1,10 @@
 mod camera;
 mod framework;
+mod material;
 
 pub use camera::*;
 pub use framework::*;
+pub use material::*;
 
 use std::time::Instant;
 

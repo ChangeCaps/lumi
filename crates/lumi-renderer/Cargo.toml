@@ -12,9 +12,12 @@ lumi-bounds = { path = "../lumi-bounds", version = "0.1.0" }
 lumi-core = { path = "../lumi-core", version = "0.1.0" }
 lumi-id = { path = "../lumi-id", version = "0.1.0" }
 lumi-macro = { path = "../lumi-macro", version = "0.1.0" }
-lumi-mesh = { path = "../lumi-mesh", version = "0.1.0", features = ["generate", "lumi-core"] }
+lumi-mesh = { path = "../lumi-mesh", version = "0.1.0", features = ["shiv", "lumi-core"] }
 lumi-shader = { path = "../lumi-shader", version = "0.1.0" }
 lumi-util = { path = "../lumi-util", version = "0.1.0" }
-lumi-world = { path = "../lumi-world", version = "0.1.0" }
 
-hyena = "0.1"
+deref-derive = "0.1"
+futures-lite = "1.12"
+hyena = "0.2"
+shiv = { path = "../../../shiv" }
+shiv-transform = { path = "../../../shiv/shiv-transform" }

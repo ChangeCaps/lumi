@@ -4,21 +4,29 @@ use std::{
 };
 
 use lumi_bind::{Bind, Bindings, BindingsLayout};
-use lumi_bounds::Aabb;
+use lumi_bounds::CascadeFrustum;
 use lumi_core::{
-    CommandEncoder, Device, DrawCommand, Extent3d, IndexFormat, LoadOp, Operations, RenderPass,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor, Resources,
-    SharedBindGroup, SharedBuffer, SharedDevice, SharedRenderPipeline, SharedTexture,
-    SharedTextureView, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor, UniformBuffer, VertexBufferLayout, VertexState, VertexStepMode,
+    CommandEncoder, Device, Extent3d, IndexFormat, LoadOp, Operations, Queue,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor, SharedBuffer,
+    SharedDevice, SharedRenderPipeline, SharedTexture, SharedTextureView, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, UniformBuffer,
+    VertexBufferLayout, VertexState, VertexStepMode,
 };
 use lumi_id::{Id, IdMap};
 use lumi_mesh::Mesh;
 use lumi_shader::{DefaultShader, ShaderProcessor, ShaderRef};
-use lumi_util::{math::Mat4, smallvec::SmallVec};
-use lumi_world::{DirectionalLight, Extract, ExtractOne, Light, LightId, Node, World};
+use lumi_util::math::Mat4;
+use shiv::{
+    query::{Changed, Query, Without},
+    system::{Commands, Res, ResInit, ResMut, ResMutInit},
+    world::{Component, Entity, FromWorld, World},
+};
+use shiv_transform::GlobalTransform;
 
-use crate::{PhaseContext, PreparedMesh, PreparedTransform, RenderPhase};
+use crate::{
+    DirectionalLight, Extract, ExtractedMeshes, PreparedLights, PreparedMeshes, PreparedTransform,
+    RenderDevice, RenderQueue,
+};
 
 #[derive(Bind)]
 pub struct PreparedShadows {
@@ -27,22 +35,39 @@ pub struct PreparedShadows {
     #[sampler(name = "shadow_map_sampler")]
     pub cascade_view: SharedTextureView,
     pub cascade_view_proj_buffers: Vec<UniformBuffer<Mat4>>,
+    pub cascade_frustums: Vec<CascadeFrustum>,
+    pub bindings_changed: bool,
+}
+
+impl FromWorld for PreparedShadows {
+    fn from_world(world: &mut World) -> Self {
+        let device = world.resource::<RenderDevice>();
+
+        Self::new(device, 0)
+    }
 }
 
 impl PreparedShadows {
     pub const SHADOW_TEXTURE_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
     pub fn new(device: &Device, cascade_count: u32) -> Self {
+        let cascade_count = u32::max(cascade_count, 4);
+
         let cascade_texture = Self::create_cascade_texture(device, cascade_count);
         let cascade_view = cascade_texture.create_view(&Default::default());
 
         let mut cascade_view_proj_buffers = Vec::with_capacity(cascade_count as usize);
         cascade_view_proj_buffers.resize_with(cascade_count as usize, Default::default);
 
+        let mut cascade_frustums = Vec::with_capacity(cascade_count as usize);
+        cascade_frustums.resize_with(cascade_count as usize, Default::default);
+
         Self {
             cascade_texture,
             cascade_view,
             cascade_view_proj_buffers,
+            cascade_frustums,
+            bindings_changed: true,
         }
     }
 
@@ -64,11 +89,13 @@ impl PreparedShadows {
 
     #[inline]
     pub fn resize_cascades(&mut self, device: &Device, cascade_count: u32) {
-        if self.cascade_texture.size().depth_or_array_layers < cascade_count {
+        if self.cascade_texture.size().depth_or_array_layers < u32::max(cascade_count, 4) {
             self.cascade_texture = Self::create_cascade_texture(device, cascade_count);
             self.cascade_view = self.cascade_texture.create_view(&Default::default());
             self.cascade_view_proj_buffers
                 .resize_with(cascade_count as usize, Default::default);
+
+            self.bindings_changed = true;
         }
     }
 
@@ -80,6 +107,13 @@ impl PreparedShadows {
             array_layer_count: NonZeroU32::new(1),
             ..Default::default()
         })
+    }
+
+    #[inline]
+    pub fn get_target_view(&self, target: &ShadowTarget) -> SharedTextureView {
+        match target.kind {
+            ShadowKind::Directional => self.get_cascade_view(target.index),
+        }
     }
 }
 
@@ -94,8 +128,10 @@ pub struct ShadowPipeline {
     pub render_pipeline: SharedRenderPipeline,
 }
 
-impl ShadowPipeline {
-    pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
+impl FromWorld for ShadowPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let mut shader_processor = world.resource_mut::<ShaderProcessor>();
+
         let mut vertex_shader = shader_processor
             .process(
                 ShaderRef::Default(DefaultShader::ShadowVertex),
@@ -109,6 +145,7 @@ impl ShadowPipeline {
             .bind::<PreparedTransform>()
             .bind::<ShadowCasterBindings>();
 
+        let device = world.resource::<RenderDevice>();
         let pipeline_layout = bindings_layout.create_pipeline_layout(device);
 
         let render_pipeline = device.create_shared_render_pipeline(&RenderPipelineDescriptor {
@@ -144,336 +181,206 @@ impl ShadowPipeline {
 }
 
 #[derive(Clone, Copy, Debug, Hash)]
-pub enum ShadowTarget {
-    Cascade { light: LightId, cascade: u32 },
+pub enum ShadowKind {
+    Directional,
+}
+
+#[derive(Clone, Copy, Debug, Hash)]
+pub struct ShadowTarget {
+    pub kind: ShadowKind,
+    pub entity: Entity,
+    pub index: u32,
 }
 
 impl ShadowTarget {
     #[inline]
-    pub fn id(&self) -> Id<ShadowTarget> {
+    pub fn id(&self) -> Id<Self> {
         Id::from_hash(self)
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ShadowDraw {
-    pub render_pipeline: SharedRenderPipeline,
-    pub bind_groups: SmallVec<[SharedBindGroup; 4]>,
-    pub vertex_buffer: SharedBuffer,
-    pub index_buffer: Option<SharedBuffer>,
-    pub draw_command: DrawCommand,
-    pub aabb: Option<Aabb>,
-    pub transform: Mat4,
+#[derive(Clone, Debug, Default)]
+pub struct ShadowTargets {
+    pub targets: Vec<ShadowTarget>,
 }
 
-impl ShadowDraw {
-    #[inline]
-    pub fn draw<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
-        render_pass.set_pipeline(&self.render_pipeline);
-
-        for (i, bind_group) in self.bind_groups.iter().enumerate() {
-            render_pass.set_bind_group(i as u32, bind_group, &[]);
-        }
-
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-
-        if let Some(index_buffer) = &self.index_buffer {
-            render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
-        }
-
-        self.draw_command.draw(render_pass);
-    }
-}
-
-pub struct ShadowRenderState {
-    pub bindings: Bindings,
-}
-
-#[derive(Default)]
-pub struct ShadowRenderStates {
-    pub states: IdMap<ShadowTarget, ShadowRenderState>,
-    pub transform: Mat4,
-}
-
-impl Deref for ShadowRenderStates {
-    type Target = IdMap<ShadowTarget, ShadowRenderState>;
+impl Deref for ShadowTargets {
+    type Target = Vec<ShadowTarget>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.states
+        &self.targets
     }
 }
 
-impl DerefMut for ShadowRenderStates {
+impl DerefMut for ShadowTargets {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.states
+        &mut self.targets
     }
 }
 
-pub struct ShadowRenderFunction {
-    prepare: fn(&PhaseContext, ShadowTarget, SharedBuffer, &World, &mut Resources),
-    render: fn(&PhaseContext, ShadowTarget, &mut Vec<ShadowDraw>, &World, &Resources),
+#[derive(Component, Default)]
+pub struct ShadowRenderState {
+    pub bindings: IdMap<ShadowTarget, Bindings>,
+    pub transform: Mat4,
 }
 
-impl ShadowRenderFunction {
-    #[inline]
-    pub fn new<T>() -> Self
-    where
-        T: Node + Extract<Mesh> + ExtractOne<Mat4>,
-    {
-        Self {
-            prepare: Self::prepare_default::<T>,
-            render: Self::render_default::<T>,
+pub fn insert_state_system(
+    mut commands: Commands,
+    query: Query<Entity, Without<ShadowRenderState>>,
+) {
+    for entity in query.iter() {
+        commands.entity(entity).insert(ShadowRenderState::default());
+    }
+}
+
+pub fn extract_directional_shadow_system(
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    shadow_pipeline: ResInit<ShadowPipeline>,
+    mut prepared_shadows: ResMutInit<PreparedShadows>,
+    mut shadow_targets: ResMut<ShadowTargets>,
+    prepared_lights: Res<PreparedLights>,
+    light_query: Extract<Query<(Entity, &DirectionalLight, Option<&GlobalTransform>)>>,
+    mut prepared_query: Query<
+        (&PreparedTransform, &mut ShadowRenderState),
+        Changed<PreparedTransform>,
+    >,
+) {
+    shadow_targets.clear();
+
+    prepared_shadows.bindings_changed = false;
+    prepared_shadows.resize_cascades(&device, prepared_lights.next_cascade_index);
+
+    let mut cascade_index = 0;
+    for (entity, light, transform) in light_query.iter() {
+        if !light.shadows {
+            continue;
+        }
+
+        let transform = transform.copied().unwrap_or_default();
+        let mut light = light.clone();
+
+        light.direction = transform.rotation_scale.mul_vec3(light.direction);
+        light.direction = light.direction.normalize_or_zero();
+
+        for cascade in 0..DirectionalLight::CASCADES {
+            let target = ShadowTarget {
+                kind: ShadowKind::Directional,
+                entity,
+                index: cascade_index,
+            };
+
+            shadow_targets.push(target);
+
+            let frustum = light.cascade_frustum(cascade);
+            prepared_shadows.cascade_frustums[cascade_index as usize] = frustum;
+
+            let view_proj = &mut prepared_shadows.cascade_view_proj_buffers[cascade_index as usize];
+            view_proj.set(light.view_proj(cascade));
+
+            let caster_bindings = ShadowCasterBindings {
+                view_proj: view_proj.buffer(&device, &queue),
+            };
+
+            prepare_target(
+                &device,
+                &queue,
+                &caster_bindings,
+                &shadow_pipeline,
+                target,
+                &mut prepared_query,
+            );
+
+            cascade_index += 1;
         }
     }
+}
 
-    fn prepare_default<T>(
-        context: &PhaseContext,
-        target: ShadowTarget,
-        view_proj: SharedBuffer,
-        world: &World,
-        resources: &mut Resources,
-    ) where
-        T: Node + ExtractOne<Mat4>,
-    {
+fn prepare_target(
+    device: &Device,
+    queue: &Queue,
+    caster_bindings: &ShadowCasterBindings,
+    shadow_pipeline: &ShadowPipeline,
+    target: ShadowTarget,
+    prepared_query: &mut Query<
+        (&PreparedTransform, &mut ShadowRenderState),
+        Changed<PreparedTransform>,
+    >,
+) {
+    let target_id = target.id();
+
+    for (transform, mut state) in prepared_query.iter_mut() {
+        let bindings = state.bindings.get_or_insert_with(target_id, || {
+            shadow_pipeline.bindings_layout.create_bindings(&device)
+        });
+
+        bindings.bind(device, queue, caster_bindings);
+        bindings.bind(device, queue, transform);
+
+        bindings.update_bind_groups(device);
+
+        state.transform = transform.transform;
+    }
+}
+
+pub fn render_shadow_system(
+    mut encoder: ResMut<CommandEncoder>,
+    prepared_meshes: Res<PreparedMeshes>,
+    prepared_shadows: Res<PreparedShadows>,
+    shadow_pipeline: Res<ShadowPipeline>,
+    shadow_targets: Res<ShadowTargets>,
+    render_query: Query<(&ExtractedMeshes, &ShadowRenderState)>,
+) {
+    for target in shadow_targets.iter() {
         let target_id = target.id();
+        let target_view = prepared_shadows.get_target_view(target);
 
-        let pipeline = if let Some(pipeline) = resources.remove::<ShadowPipeline>() {
-            pipeline
-        } else {
-            let shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
-            ShadowPipeline::new(context.device, shader_processor)
-        };
+        let frustum = prepared_shadows.cascade_frustums[target.index as usize];
 
-        for (id, _) in world.iter_nodes::<T>() {
-            let mut states = resources.remove_id_or_default::<ShadowRenderStates>(id);
+        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Lumi Shadow Pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &target_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        });
 
-            let transform = if let Some(transform) = resources.get_id::<PreparedTransform>(id) {
-                transform
+        render_pass.set_pipeline(&shadow_pipeline.render_pipeline);
+
+        for (meshes, state) in render_query.iter() {
+            let bindings = if let Some(state) = state.bindings.get(target_id) {
+                state
             } else {
-                resources.insert_id(id.cast(), states);
-
                 continue;
             };
 
-            states.transform = *transform.transform;
+            for mesh_id in meshes.iter().copied() {
+                let prepared_mesh = prepared_meshes.get(mesh_id).unwrap();
 
-            let state = states.get_or_insert_with(target_id, || ShadowRenderState {
-                bindings: pipeline.bindings_layout.create_bindings(context.device),
-            });
-
-            let bindings = &mut state.bindings;
-
-            let caster_bindings = ShadowCasterBindings {
-                view_proj: view_proj.clone(),
-            };
-
-            bindings.bind(context.device, context.queue, &caster_bindings);
-            bindings.bind(context.device, context.queue, transform);
-            bindings.update_bind_groups(context.device);
-
-            resources.insert_id(id.cast(), states);
-        }
-
-        resources.insert(pipeline);
-
-        for id in context.changes.removed() {
-            resources.remove_id::<ShadowRenderStates>(id);
-        }
-    }
-
-    fn render_default<T>(
-        _context: &PhaseContext,
-        target: ShadowTarget,
-        draws: &mut Vec<ShadowDraw>,
-        world: &World,
-        resources: &Resources,
-    ) where
-        T: Node + Extract<Mesh> + ExtractOne<Mat4>,
-    {
-        let pipeline = resources.get::<ShadowPipeline>().unwrap();
-
-        let target_id = target.id();
-
-        for (id, node) in world.iter_nodes::<T>() {
-            let states = resources.get_id::<ShadowRenderStates>(id).unwrap();
-            let state = states.get(target_id).unwrap();
-            let bindings = &state.bindings;
-
-            let mut i = 0;
-            node.extract(&mut |mesh| {
-                let mesh_id = mesh.id();
-
-                let prepared_mesh = if let Some(mesh) = resources.get_id::<PreparedMesh>(mesh_id) {
-                    mesh
-                } else {
-                    return;
-                };
-
-                let aabb = resources.get_id::<Aabb>(mesh_id).cloned();
-
-                let vertex_buffer =
-                    if let Some(vertex_buffer) = prepared_mesh.attributes.get(Mesh::POSITION) {
-                        vertex_buffer.clone()
-                    } else {
-                        return;
-                    };
-
-                let draw = ShadowDraw {
-                    render_pipeline: pipeline.render_pipeline.clone(),
-                    bind_groups: bindings.bind_groups().cloned().collect(),
-                    vertex_buffer,
-                    index_buffer: prepared_mesh.indices.clone(),
-                    draw_command: mesh.draw_command(),
-                    aabb,
-                    transform: states.transform,
-                };
-
-                draws.push(draw);
-
-                i += 1;
-            });
-        }
-    }
-
-    #[inline]
-    pub fn prepare(
-        &self,
-        context: &PhaseContext,
-        target: ShadowTarget,
-        view_proj: SharedBuffer,
-        world: &World,
-        resources: &mut Resources,
-    ) {
-        (self.prepare)(context, target, view_proj, world, resources);
-    }
-
-    #[inline]
-    pub fn render(
-        &self,
-        context: &PhaseContext,
-        target: ShadowTarget,
-        draws: &mut Vec<ShadowDraw>,
-        world: &World,
-        resources: &Resources,
-    ) {
-        (self.render)(context, target, draws, world, resources);
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PrepareShadows;
-
-impl RenderPhase for PrepareShadows {
-    fn prepare(&mut self, context: &PhaseContext, world: &World, resources: &mut Resources) {
-        let mut cascade_count = 0;
-        for light in world.lights() {
-            if let Light::Directional(directional) = light {
-                if directional.shadows {
-                    cascade_count += 4;
-                }
-            }
-        }
-
-        let mut prepared_shadows = if let Some(shadows) = resources.remove::<PreparedShadows>() {
-            shadows
-        } else {
-            PreparedShadows::new(context.device, cascade_count)
-        };
-
-        let mut cascade_index = 0;
-        for (id, light) in world.iter_lights() {
-            match light {
-                Light::Directional(directional) => {
-                    if !directional.shadows {
+                if let Some(aabb) = prepared_mesh.aabb {
+                    if !frustum.intersects_shape(&aabb, state.transform) {
                         continue;
                     }
-
-                    for cascade in 0..DirectionalLight::CASCADES {
-                        let target = ShadowTarget::Cascade { light: id, cascade };
-                        let view_proj =
-                            &mut prepared_shadows.cascade_view_proj_buffers[cascade_index];
-
-                        view_proj.set(directional.view_proj(cascade));
-
-                        let view_proj_buffer = view_proj.buffer(context.device, context.queue);
-
-                        resources.scope(
-                            |resources: &mut Resources, render_functions: &mut IdMap<ShadowRenderFunction>| {
-                                for render_function in render_functions.values() {
-                                    render_function.prepare(context, target, view_proj_buffer.clone(), world, resources);
-                                }
-                            },
-                        );
-
-                        cascade_index += 1;
-                    }
                 }
-                _ => {}
-            }
-        }
 
-        resources.insert(prepared_shadows);
-    }
+                bindings.apply(&mut render_pass);
 
-    fn render(
-        &self,
-        context: &PhaseContext,
-        encoder: &mut CommandEncoder,
-        world: &World,
-        resources: &Resources,
-    ) {
-        let prepared_shadow = resources.get::<PreparedShadows>().unwrap();
-
-        let mut cascade_index = 0;
-        for (id, light) in world.iter_lights() {
-            match light {
-                Light::Directional(directional) => {
-                    if !directional.shadows {
-                        continue;
-                    }
-
-                    for cascade in 0..DirectionalLight::CASCADES {
-                        let target = ShadowTarget::Cascade { light: id, cascade };
-                        let frustum = directional.cascade_frustum(cascade);
-
-                        let mut draws = Vec::new();
-                        for render_function in resources.values_id::<ShadowRenderFunction>() {
-                            render_function.render(context, target, &mut draws, world, resources);
-                        }
-
-                        draws.retain(|draw| {
-                            if let Some(aabb) = &draw.aabb {
-                                frustum.intersects_shape(aabb, draw.transform)
-                            } else {
-                                true
-                            }
-                        });
-
-                        let view = prepared_shadow.get_cascade_view(cascade_index);
-
-                        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                            label: Some("Shadow Pass"),
-                            color_attachments: &[],
-                            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                                view: &view,
-                                depth_ops: Some(Operations {
-                                    load: LoadOp::Clear(1.0),
-                                    store: true,
-                                }),
-                                stencil_ops: None,
-                            }),
-                        });
-
-                        for draw in draws.iter() {
-                            draw.draw(&mut render_pass);
-                        }
-
-                        cascade_index += 1;
-                    }
+                if let Some(vertex_buffer) = prepared_mesh.attributes.get(Mesh::POSITION) {
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 }
-                _ => {}
+
+                if let Some(index_buffer) = prepared_mesh.indices.as_ref() {
+                    render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
+                }
+
+                prepared_mesh.draw.draw(&mut render_pass);
             }
         }
     }

@@ -1,17 +1,17 @@
 mod data;
 
 pub use data::*;
+use lumi_material::Primitives;
 
 use std::path::Path;
-
-use lumi_material::MeshNode;
 
 pub trait OpenGltfExt: Sized {
     fn open_gltf(path: impl AsRef<Path>) -> Result<Self, gltf::Error>;
 }
 
-impl OpenGltfExt for MeshNode {
+impl OpenGltfExt for Primitives {
     fn open_gltf(path: impl AsRef<Path>) -> Result<Self, gltf::Error> {
-        Ok(GltfData::open(path)?.create_mesh_node())
+        let data = GltfData::open(path)?;
+        Ok(data.create_primitives())
     }
 }

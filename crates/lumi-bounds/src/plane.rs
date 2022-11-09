@@ -33,4 +33,9 @@ impl Plane {
     pub fn normal_d(&self) -> Vec4 {
         self.normal_d
     }
+
+    #[inline]
+    pub fn distance(&self, point: Vec3A) -> f32 {
+        self.normal_d.dot(point.extend(1.0))
+    }
 }

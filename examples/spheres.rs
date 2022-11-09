@@ -7,61 +7,47 @@ use util::{App, CameraController};
 use winit::event::Event;
 
 struct Spheres {
-    camera: CameraId,
+    camera: Entity,
     camera_controller: CameraController,
     material: StandardMaterial,
-    spheres: Vec<NodeId>,
     start: Instant,
     last_frame: Instant,
     frame_times: Vec<f32>,
 }
 
 impl App for Spheres {
-    fn init(world: &mut World, renderer: &mut Renderer) -> Self {
-        renderer.settings_mut().render_sky = true;
+    fn init(world: &mut World, _renderer: &mut Renderer) -> Self {
+        let mesh = shape::uv_sphere(1.0, 32);
 
-        *world.environment_mut() = Environment::open("env.hdr").unwrap();
+        world.insert_resource(Environment::open("env.hdr").unwrap());
 
-        let mesh = MeshNode::new(
-            StandardMaterial::default(),
-            shape::uv_sphere(1.0, 32),
-            Mat4::IDENTITY,
-        );
-
-        let mut suzannes = Vec::new();
         for x in -20..=20 {
             for z in -20..=20 {
-                let mut mesh = mesh.clone();
-                mesh.transform =
-                    Mat4::from_translation(Vec3::new(x as f32 * 3.0, 0.0, z as f32 * 3.0));
-                let sphere = world.add(mesh);
-                suzannes.push(sphere);
+                let transform = GlobalTransform::from_xyz(x as f32 * 3.0, 0.0, z as f32 * 3.0);
+                world
+                    .spawn()
+                    .insert(transform)
+                    .insert(mesh.clone())
+                    .insert(StandardMaterial::default());
             }
         }
 
-        world.add(MeshNode::new(
-            StandardMaterial {
-                ..Default::default()
-            },
-            shape::cube(1000.0, 1.0, 1000.0),
-            Mat4::from_translation(Vec3::new(0.0, -2.0, 0.0)),
-        ));
-
-        world.ambient_mut().intensity = 15_000.0;
-
-        world.add_light(DirectionalLight {
+        world.spawn().insert(DirectionalLight {
             color: Vec3::new(1.0, 1.0, 1.0),
             direction: Vec3::new(1.0, -1.0, 1.0),
             illuminance: 75_000.0,
             ..Default::default()
         });
 
-        let camera = world.add_camera(Camera {
-            view: Mat4::from_translation(Vec3::new(0.0, 0.0, 4.0)),
-            aperture: 16.0,
-            shutter_speed: 1.0 / 125.0,
-            ..Default::default()
-        });
+        let camera = world
+            .spawn()
+            .insert(Camera {
+                aperture: 16.0,
+                shutter_speed: 1.0 / 125.0,
+                ..Default::default()
+            })
+            .insert(GlobalTransform::from_xyz(0.0, 0.0, 10.0))
+            .entity();
 
         let material = StandardMaterial {
             base_color_texture: Some(Image::open_srgb("examples/assets/texture.png").unwrap()),
@@ -71,7 +57,6 @@ impl App for Spheres {
         Self {
             camera,
             camera_controller: CameraController::default(),
-            spheres: suzannes,
             material,
             start: Instant::now(),
             last_frame: Instant::now(),
@@ -84,16 +69,10 @@ impl App for Spheres {
     }
 
     fn render(&mut self, world: &mut World, _renderer: &mut Renderer, ctx: &egui::Context) {
-        let camera = world.camera_mut(self.camera);
-        camera.view = self.camera_controller.view();
-
-        egui::Window::new("World").show(ctx, |ui| {
-            egui::Grid::new("world").show(ui, |ui| {
-                ui.label("Ambient");
-                ui.add(egui::DragValue::new(&mut world.ambient_mut().intensity));
-                ui.end_row();
-            });
-        });
+        let mut camera = world.entity_mut(self.camera);
+        let mut camera = camera.get_mut::<GlobalTransform>().unwrap();
+        camera.rotation_scale = self.camera_controller.rotation();
+        camera.translation = self.camera_controller.translation();
 
         egui::Window::new("Material").show(ctx, |ui| {
             egui::Grid::new("grid").show(ui, |ui| {
@@ -170,15 +149,16 @@ impl App for Spheres {
         });
 
         let t = self.start.elapsed().as_secs_f32();
-        for &sphere in &self.spheres {
-            let spheres = world.node_mut::<MeshNode>(sphere);
-            spheres.primitives[0].material = self.material.clone();
+        let mut query = world.query::<(&mut GlobalTransform, &mut StandardMaterial)>();
 
-            let (_, _, translation) = spheres.transform.to_scale_rotation_translation();
+        for (mut transform, mut material) in query.iter_mut(world) {
+            material.set(self.material.clone());
+
+            let translation = transform.translation;
             let x = (translation.x + t).sin() * 0.5 + 0.5;
             let z = (translation.z * 2.0 + t).sin() * 0.5 + 0.5;
             let h = x + z;
-            spheres.transform = Mat4::from_translation(Vec3::new(translation.x, h, translation.z));
+            transform.translation = Vec3::new(translation.x, h, translation.z);
         }
 
         egui::Window::new("Information").show(ctx, |ui| {

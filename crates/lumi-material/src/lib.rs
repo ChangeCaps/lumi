@@ -25,22 +25,21 @@ pub enum MaterialSystem {
     Draw,
 }
 
-pub struct MaterialPlugin<T: Material> {
-    marker: PhantomData<T>,
+pub struct ExtractMaterialPlugin<T: ExtractMaterials> {
+    _marker: PhantomData<T>,
 }
 
-impl<T: Material> Default for MaterialPlugin<T> {
+impl<T: ExtractMaterials> Default for ExtractMaterialPlugin<T> {
+    #[inline]
     fn default() -> Self {
         Self {
-            marker: PhantomData,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<T: Material> RendererPlugin for MaterialPlugin<T> {
+impl<T: ExtractMaterials> RendererPlugin for ExtractMaterialPlugin<T> {
     fn build(&self, renderer: &mut Renderer) {
-        renderer.world.init_resource::<PreparedMaterialPipelines>();
-
         renderer.extract.add_system_to_stage(
             ExtractStage::Extract,
             extract_material_system::<T>.label(MaterialSystem::Extract),
@@ -56,14 +55,38 @@ impl<T: Material> RendererPlugin for MaterialPlugin<T> {
                     .after(RenderSystem::PrepareCamera),
             )
             .add_system_to_stage(
-                RenderStage::Prepare,
-                update_bindings_system
-                    .label(MaterialSystem::Bindings)
-                    .after(MaterialSystem::Prepare),
-            )
-            .add_system_to_stage(
                 RenderStage::Draw,
                 draw_material_system::<T>.label(MaterialSystem::Draw),
             );
+    }
+}
+
+pub struct MaterialPlugin<T: Material> {
+    marker: PhantomData<T>,
+}
+
+impl<T: Material> Default for MaterialPlugin<T> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<T: Material> RendererPlugin for MaterialPlugin<T> {
+    fn build(&self, renderer: &mut Renderer) {
+        renderer.world.init_resource::<PreparedMaterialPipelines>();
+
+        renderer.render.add_system_to_stage(
+            RenderStage::Prepare,
+            update_bindings_system
+                .label(MaterialSystem::Bindings)
+                .after(MaterialSystem::Prepare),
+        );
+
+        renderer.add_plugin(ExtractMaterialPlugin::<T>::default());
+        renderer.add_plugin(ExtractMaterialPlugin::<Primitive<T>>::default());
+        renderer.add_plugin(ExtractMaterialPlugin::<Primitives<T>>::default());
     }
 }

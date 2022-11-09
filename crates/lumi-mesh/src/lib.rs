@@ -23,6 +23,7 @@ pub type MeshId = Id<Mesh>;
 ///
 /// **Note** data is cloned on write.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "shiv", derive(shiv::world::Component))]
 pub struct Mesh {
     attributes: HashMap<String, SharedState<MeshAttribute>>,
     indices: Option<SharedState<Vec<u32>>>,

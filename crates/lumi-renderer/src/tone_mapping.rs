@@ -1,28 +1,33 @@
 use lumi_bind::{Bind, Bindings, BindingsLayout};
 use lumi_core::{
-    AddressMode, BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, Device,
-    FilterMode, FragmentState, LoadOp, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, SamplerDescriptor,
-    SharedDevice, SharedSampler, SharedTextureView, TextureFormat, TextureView, VertexState,
+    BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, FragmentState, LoadOp,
+    Operations, RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
+    SharedDevice, SharedRenderPipeline, SharedTextureView, TextureFormat, VertexState,
 };
 use lumi_shader::{ShaderProcessor, ShaderRef};
+use lumi_util::HashMap;
+use shiv::{
+    system::{Local, Res, ResMut},
+    world::{Entity, FromWorld, World},
+};
+
+use crate::{RenderDevice, RenderQueue, View};
 
 #[derive(Bind)]
-struct ToneMappingBindings<'a> {
+struct ToneMappingBindings {
     #[texture]
-    hdr_texture: &'a SharedTextureView,
-    #[sampler]
-    hdr_sampler: &'a SharedSampler,
+    #[sampler(name = "hdr_sampler")]
+    hdr_texture: SharedTextureView,
 }
 
-pub struct ToneMapping {
-    pub bindings: Bindings,
-    pub sampler: SharedSampler,
-    pub pipeline: RenderPipeline,
+pub struct ToneMappingPipeline {
+    pub bindings_layout: BindingsLayout,
+    pub render_pipeline: SharedRenderPipeline,
 }
 
-impl ToneMapping {
-    pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
+impl FromWorld for ToneMappingPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let mut shader_processor = world.resource_mut::<ShaderProcessor>();
         let mut vertex = shader_processor
             .process(
                 ShaderRef::module("lumi/fullscreen_vert.wgsl"),
@@ -42,10 +47,10 @@ impl ToneMapping {
             .with_shader(&fragment)
             .bind::<ToneMappingBindings>();
 
+        let device = world.resource::<RenderDevice>();
         let pipeline_layout = bindings_layout.create_pipeline_layout(device);
-        let bindings = bindings_layout.create_bindings(device);
 
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+        let render_pipeline = device.create_shared_render_pipeline(&RenderPipelineDescriptor {
             label: Some("ToneMapping"),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
@@ -68,65 +73,48 @@ impl ToneMapping {
             multiview: None,
         });
 
-        let sampler = device.create_shared_sampler(&SamplerDescriptor {
-            label: Some("ToneMapping"),
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            ..Default::default()
-        });
-
         Self {
-            bindings,
-            pipeline,
-            sampler,
+            bindings_layout,
+            render_pipeline,
         }
     }
+}
 
-    pub fn run(
-        &mut self,
-        device: &Device,
-        queue: &Queue,
-        encoder: &mut CommandEncoder,
-        hdr: &SharedTextureView,
-        target: &TextureView,
-    ) {
-        self.bindings.bind(
-            device,
-            queue,
-            &ToneMappingBindings {
-                hdr_texture: hdr,
-                hdr_sampler: &self.sampler,
+pub fn tone_mapping_system(
+    mut bindings: Local<HashMap<Entity, Bindings>>,
+    pipeline: Local<ToneMappingPipeline>,
+    mut encoder: ResMut<CommandEncoder>,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    view: Res<View>,
+) {
+    let bindings = bindings
+        .entry(view.camera)
+        .or_insert_with(|| pipeline.bindings_layout.create_bindings(&device));
+
+    let tone_mapping_bindings = ToneMappingBindings {
+        hdr_texture: view.frame_buffer.hdr_view.clone(),
+    };
+
+    bindings.bind::<ToneMappingBindings>(&device, &queue, &tone_mapping_bindings);
+
+    bindings.update_bind_groups(&device);
+
+    let mut tonemap_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+        label: Some("Lumi Tonemap Pass"),
+        color_attachments: &[Some(RenderPassColorAttachment {
+            view: &view.target,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(Color::TRANSPARENT),
+                store: true,
             },
-        );
+        })],
+        depth_stencil_attachment: None,
+    });
 
-        self.bindings.update_bind_groups(device);
+    tonemap_pass.set_pipeline(&pipeline.render_pipeline);
+    bindings.apply(&mut tonemap_pass);
 
-        let mut tonemap_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("Lumi Tonemap Pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: target,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color::TRANSPARENT),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
-
-        tonemap_pass.set_pipeline(&self.pipeline);
-
-        for (i, group) in self.bindings.bind_groups().enumerate() {
-            tonemap_pass.set_bind_group(i as u32, group, &[]);
-        }
-
-        tonemap_pass.draw(0..3, 0..1);
-    }
-
-    pub fn bindings(&self) -> &Bindings {
-        &self.bindings
-    }
+    tonemap_pass.draw(0..3, 0..1);
 }

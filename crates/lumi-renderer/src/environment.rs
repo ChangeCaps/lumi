@@ -22,7 +22,7 @@ impl Default for Environment {
 
         Self {
             kind: EnvironmentSource::Baked(data),
-            id: EnvironmentId::new(),
+            id: EnvironmentId::NULL,
         }
     }
 }

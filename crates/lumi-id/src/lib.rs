@@ -13,6 +13,8 @@ pub struct Id<T: ?Sized = ()> {
 }
 
 impl<T: ?Sized> Id<T> {
+    pub const NULL: Self = Self::from_uuid(Uuid::nil());
+
     #[inline(always)]
     pub fn new() -> Self {
         Self {
@@ -27,6 +29,24 @@ impl<T: ?Sized> Id<T> {
             uuid,
             _marker: PhantomData,
         }
+    }
+
+    #[inline(always)]
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self {
+            uuid: Uuid::from_bytes(bytes),
+            _marker: PhantomData,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn as_bytes(&self) -> &[u8; 16] {
+        self.uuid.as_bytes()
+    }
+
+    #[inline(always)]
+    pub const fn into_bytes(self) -> [u8; 16] {
+        self.uuid.into_bytes()
     }
 
     #[inline(always)]

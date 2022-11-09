@@ -13,7 +13,6 @@ pub use lumi_mesh as mesh;
 pub use lumi_renderer as renderer;
 pub use lumi_shader as shader;
 pub use lumi_util as util;
-pub use lumi_world as world;
 
 pub use lumi_macro::ShaderType;
 
@@ -26,33 +25,29 @@ pub mod prelude {
     #[cfg(feature = "gltf")]
     pub use lumi_gltf::OpenGltfExt;
     pub use lumi_macro::*;
-    pub use lumi_material::{Material, MeshNode, Primitive, StandardMaterial};
+    pub use lumi_material::{Material, MaterialPlugin, Primitive, Primitives, StandardMaterial};
     pub use lumi_mesh::{shape, Mesh, MeshId};
     pub use lumi_renderer::{
-        PhaseContext, PhaseLabel, RenderPhase, RenderPlugin, RenderViewPhase, Renderer,
-        RendererBuilder, ViewPhaseContext,
+        Camera, DirectionalLight, Entity, Environment, GlobalTransform, Mut, OwnedPtr, OwnedPtrMut,
+        PointLight, Query, QueryState, Renderer, RendererPlugin, Transform, With, Without, World,
     };
-    pub use lumi_shader::{DefaultShader, Shader, ShaderRef};
+    pub use lumi_shader::{DefaultShader, Shader, ShaderDefs, ShaderRef};
     pub use lumi_util::math::*;
-    pub use lumi_world::{
-        AmbientLight, Camera, CameraId, CameraTarget, DirectionalLight, Environment, EnvironmentId,
-        EnvironmentSource, Light, LightId, Node, NodeId, Orthographic, Perspective, PointLight,
-        Projection, World,
-    };
 }
 
-use material::MaterialPlugin;
-use renderer::{PostProcessPlugin, PreparePlugin, RenderPlugin, RendererBuilder, SkyPlugin};
+use material::{MaterialPlugin, Primitive, Primitives, StandardMaterial};
+use renderer::{CoreExtractPlugin, CorePlugin, ExtractMeshPlugin, Renderer, RendererPlugin};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultPlugin;
 
-impl RenderPlugin for DefaultPlugin {
-    fn build(&self, builder: &mut RendererBuilder) {
-        builder
-            .add_plugin(PreparePlugin)
-            .add_plugin(SkyPlugin)
-            .add_plugin(PostProcessPlugin)
-            .add_plugin(MaterialPlugin::default());
+impl RendererPlugin for DefaultPlugin {
+    fn build(&self, renderer: &mut Renderer) {
+        renderer
+            .add_plugin(CorePlugin)
+            .add_plugin(CoreExtractPlugin)
+            .add_plugin(MaterialPlugin::<StandardMaterial>::default())
+            .add_plugin(ExtractMeshPlugin::<Primitive>::default())
+            .add_plugin(ExtractMeshPlugin::<Primitives>::default());
     }
 }

@@ -3,6 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use lumi_id::Id;
 use lumi_util::{once_cell::sync::OnceCell, AtomicMarker, SharedState};
 use wgpu::{
     AddressMode, BufferDescriptor, BufferUsages, FilterMode, ImageCopyBuffer, ImageCopyTexture,
@@ -83,10 +84,11 @@ impl From<&SamplerDescriptor<'_>> for ImageSamplerDescriptor {
 
 #[derive(Clone, Debug, Default)]
 pub struct Image {
+    id: Id<Image>,
     data: SharedState<ImageData>,
     write: AtomicMarker,
-    texture: OnceCell<SharedTexture>,
-    view: OnceCell<SharedTextureView>,
+    texture: SharedState<OnceCell<SharedTexture>>,
+    view: SharedState<OnceCell<SharedTextureView>>,
     pub sampler: ImageSamplerDescriptor,
 }
 
@@ -132,7 +134,7 @@ impl Image {
 
     #[inline]
     pub fn set_texture(&mut self, texture: SharedTexture) {
-        if let Some(inner_texture) = self.texture.get_mut() {
+        if let Some(inner_texture) = self.texture.get_mut().get_mut() {
             *inner_texture = texture;
         } else {
             self.texture
@@ -142,13 +144,18 @@ impl Image {
     }
 
     #[inline]
+    pub const fn id(&self) -> Id<Image> {
+        self.id
+    }
+
+    #[inline]
     pub fn texture_id(&self) -> Option<TextureId> {
         self.get_texture().map(|texture| texture.id())
     }
 
     #[inline]
     pub fn get_texture(&self) -> Option<&SharedTexture> {
-        self.texture.get()
+        self.texture.get().get()
     }
 
     #[inline]
@@ -163,6 +170,8 @@ impl Image {
 
     #[inline]
     pub fn data_mut(&mut self) -> &mut ImageData {
+        self.id = Id::new();
+
         if self.data.is_shared() {
             self.write.unmark();
             self.texture.take();
@@ -209,7 +218,7 @@ impl Image {
 
     #[inline]
     pub fn download(&mut self, device: &Device, queue: &Queue) {
-        let texture = if let Some(texture) = self.texture.get() {
+        let texture = if let Some(texture) = self.texture.get().get() {
             texture
         } else {
             return;
@@ -218,6 +227,8 @@ impl Image {
         if self.write.is_marked() {
             return;
         }
+
+        self.id = Id::new();
 
         let stagning_buffer = device.create_buffer(&BufferDescriptor {
             label: None,
@@ -260,6 +271,15 @@ impl From<ImageData> for Image {
         Self::new(image)
     }
 }
+
+impl PartialEq for Image {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+impl Eq for Image {}
 
 impl Deref for Image {
     type Target = ImageData;

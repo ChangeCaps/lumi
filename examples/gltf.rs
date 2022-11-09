@@ -1,37 +1,46 @@
 mod util;
 
+use std::path::PathBuf;
+
+use egui_file::FileDialog;
 use lumi::prelude::*;
 use util::{App, CameraController, FpsCounter};
 use winit::event::Event;
 
 struct GltfViewer {
-    camera: CameraId,
+    camera: Entity,
     camera_controller: CameraController,
-    model: NodeId,
+    model: Entity,
     fps_counter: FpsCounter,
     material: StandardMaterial,
+    file: PathBuf,
+    file_dialog: Option<FileDialog>,
 }
 
 impl App for GltfViewer {
     fn init(world: &mut World, _renderer: &mut Renderer) -> Self {
-        let model = MeshNode::open_gltf("examples/assets/suzanne.glb").unwrap();
-        let model = world.add(model);
+        let model = Primitives::open_gltf("examples/assets/suzanne.glb").unwrap();
 
-        *world.environment_mut() = Environment::open("env.hdr").unwrap();
+        world.insert_resource(Environment::open("env.hdr").unwrap());
 
-        world.add_light(DirectionalLight {
+        let model = world.spawn().insert(model).entity();
+
+        world.spawn().insert(DirectionalLight {
             color: Vec3::new(1.0, 1.0, 1.0),
             direction: Vec3::new(1.0, -1.0, 1.0),
             illuminance: 75_000.0,
             ..Default::default()
         });
 
-        let camera = world.add_camera(Camera {
-            view: Mat4::from_translation(Vec3::new(0.0, 0.0, 4.0)),
-            aperture: 16.0,
-            shutter_speed: 1.0 / 125.0,
-            ..Default::default()
-        });
+        let camera = world
+            .spawn()
+            .insert(Camera {
+                aperture: 16.0,
+                shutter_speed: 1.0 / 125.0,
+                ..Default::default()
+            })
+            .insert(GlobalTransform::from_xyz(0.0, 0.0, 10.0))
+            .entity();
 
         Self {
             camera,
@@ -39,6 +48,8 @@ impl App for GltfViewer {
             model,
             fps_counter: FpsCounter::new(),
             material: Default::default(),
+            file: PathBuf::from("examples/assets/suzanne.glb"),
+            file_dialog: None,
         }
     }
 
@@ -47,91 +58,39 @@ impl App for GltfViewer {
     }
 
     fn render(&mut self, world: &mut World, _renderer: &mut Renderer, ctx: &egui::Context) {
-        let camera = world.camera_mut(self.camera);
-        camera.view = self.camera_controller.view();
+        let mut camera = world.entity_mut(self.camera);
+        let mut camera = camera.get_mut::<GlobalTransform>().unwrap();
+        camera.translation = self.camera_controller.translation();
+        camera.rotation_scale = self.camera_controller.rotation();
 
-        egui::Window::new("Material").show(ctx, |ui| {
-            egui::Grid::new("grid").show(ui, |ui| {
-                ui.label("Thickness");
-                ui.add(egui::Slider::new(&mut self.material.thickness, 0.0..=1.0));
-                ui.end_row();
+        util::material_window(ctx, &mut self.material);
 
-                ui.add(egui::Checkbox::new(
-                    &mut self.material.subsurface,
-                    "Subsurface",
-                ));
-                ui.end_row();
+        egui::Window::new("File").show(ctx, |ui| {
+            if ui.button("Open").clicked() {
+                let mut dialog = FileDialog::open_file(Some(self.file.clone()));
+                dialog.open();
+                self.file_dialog = Some(dialog);
+            }
 
-                ui.label("Subsurface Power");
-                ui.add(egui::Slider::new(
-                    &mut self.material.subsurface_power,
-                    0.0..=10.0,
-                ));
-                ui.end_row();
+            if let Some(dialog) = &mut self.file_dialog {
+                if dialog.show(ctx).selected() {
+                    if let Some(path) = dialog.path() {
+                        self.file = path.clone();
 
-                ui.label("Subsurface Color");
-                egui::color_picker::color_edit_button_rgb(
-                    ui,
-                    lumi_util::bytemuck::cast_mut(&mut self.material.subsurface_color),
-                );
-                ui.end_row();
-
-                ui.label("Base Color");
-                egui::color_picker::color_edit_button_rgba(
-                    ui,
-                    lumi_util::bytemuck::cast_mut(&mut self.material.base_color),
-                    egui::color_picker::Alpha::OnlyBlend,
-                );
-                ui.end_row();
-
-                ui.label("Metallic");
-                ui.add(egui::Slider::new(&mut self.material.metallic, 0.0..=1.0));
-                ui.end_row();
-
-                ui.label("Roughness");
-                ui.add(egui::Slider::new(&mut self.material.roughness, 0.0..=1.0));
-                ui.end_row();
-
-                ui.label("Clearcoat");
-                ui.add(egui::Slider::new(&mut self.material.clearcoat, 0.0..=1.0));
-                ui.end_row();
-
-                ui.label("Clearcoat Roughness");
-                ui.add(egui::Slider::new(
-                    &mut self.material.clearcoat_roughness,
-                    0.0..=1.0,
-                ));
-                ui.end_row();
-
-                ui.label("Emissive");
-                egui::color_picker::color_edit_button_rgb(
-                    ui,
-                    lumi_util::bytemuck::cast_mut(&mut self.material.emissive),
-                );
-                ui.end_row();
-
-                ui.label("Transmission");
-                ui.add(egui::Slider::new(
-                    &mut self.material.transmission,
-                    0.0..=1.0,
-                ));
-                ui.end_row();
-
-                ui.label("Ior");
-                ui.add(egui::Slider::new(&mut self.material.ior, 1.0..=4.0));
-                ui.end_row();
-
-                ui.label("Absorption");
-                egui::color_picker::color_edit_button_rgb(
-                    ui,
-                    lumi_util::bytemuck::cast_mut(&mut self.material.absorption),
-                );
-                ui.end_row();
-            });
+                        if let Ok(model) = Primitives::open_gltf(path) {
+                            let mut entity = world.entity_mut(self.model);
+                            entity.insert(model);
+                        } else {
+                            println!("Failed to open gltf file");
+                        }
+                    }
+                }
+            }
         });
 
-        for primitive in world.node_mut::<MeshNode>(self.model).primitives.iter_mut() {
-            primitive.material = self.material.clone();
+        let mut model = world.entity_mut(self.model);
+        for _primitive in model.get_mut::<Primitives>().unwrap().iter_mut() {
+            //primitive.material = self.material.clone();
         }
 
         egui::Window::new("Information").show(ctx, |ui| {

@@ -2,22 +2,21 @@ use lumi_bind::{Bind, Bindings, BindingsLayout};
 use lumi_core::{
     BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction,
     DepthStencilState, Device, FragmentState, MultisampleState, PipelineLayout,
-    RenderPipelineDescriptor, Resources, SharedDevice, SharedRenderPipeline, SharedTextureView,
-    TextureFormat, VertexState,
+    RenderPipelineDescriptor, SharedDevice, SharedRenderPipeline, SharedTextureView, TextureFormat,
+    VertexState,
 };
-use lumi_macro::PhaseLabel;
 use lumi_shader::{DefaultShader, Shader, ShaderProcessor, ShaderRef};
-use lumi_world::{RawCamera, World};
-
-use crate::{
-    CorePhase, PreparedEnvironment, RenderPlugin, RenderViewPhase, RendererBuilder,
-    ViewPhaseContext,
+use lumi_util::HashMap;
+use shiv::{
+    query::Query,
+    system::{Local, Res, ResMut},
+    world::{Entity, FromWorld, World},
 };
+
+use crate::{PreparedCamera, PreparedEnvironment, RenderDevice, RenderQueue, View};
 
 #[derive(Bind)]
 pub struct SkyBindings {
-    #[uniform]
-    pub camera: RawCamera,
     #[texture(dimension = cube)]
     #[sampler(name = "sky_sampler")]
     pub sky_texture: SharedTextureView,
@@ -32,8 +31,9 @@ pub struct SkyPipeline {
     pub sample_count: u32,
 }
 
-impl SkyPipeline {
-    pub fn new(device: &Device, shader_processor: &mut ShaderProcessor, sample_count: u32) -> Self {
+impl FromWorld for SkyPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let mut shader_processor = world.resource_mut::<ShaderProcessor>();
         let mut vertex_shader = shader_processor
             .process(ShaderRef::module("lumi/sky_vert.wgsl"), &Default::default())
             .unwrap();
@@ -42,12 +42,14 @@ impl SkyPipeline {
             .unwrap();
         vertex_shader.rebind_with(&mut fragment_shader).unwrap();
 
+        let device = world.resource::<RenderDevice>();
         vertex_shader.compile(device).unwrap();
         fragment_shader.compile(device).unwrap();
 
         let bindings_layout = BindingsLayout::new()
             .with_shader(&vertex_shader)
             .with_shader(&fragment_shader)
+            .bind::<PreparedCamera>()
             .bind::<SkyBindings>();
 
         let pipeline_layout = bindings_layout.create_pipeline_layout(device);
@@ -56,7 +58,7 @@ impl SkyPipeline {
             &vertex_shader,
             &fragment_shader,
             &pipeline_layout,
-            sample_count,
+            1,
         );
 
         Self {
@@ -65,8 +67,25 @@ impl SkyPipeline {
             bindings_layout,
             pipeline_layout,
             render_pipeline,
-            sample_count,
+            sample_count: 1,
         }
+    }
+}
+
+impl SkyPipeline {
+    fn recreate_pipeline(&mut self, device: &Device, sample_count: u32) {
+        if self.sample_count == sample_count {
+            return;
+        }
+
+        self.render_pipeline = Self::create_render_pipeline(
+            device,
+            &self.vertex_shader,
+            &self.fragment_shader,
+            &self.pipeline_layout,
+            sample_count,
+        );
+        self.sample_count = sample_count;
     }
 
     fn create_render_pipeline(
@@ -108,102 +127,42 @@ impl SkyPipeline {
             multiview: Default::default(),
         })
     }
-
-    pub fn recreate_pipeline(&mut self, device: &Device, sample_count: u32) {
-        if self.sample_count != sample_count {
-            self.sample_count = sample_count;
-
-            self.render_pipeline = Self::create_render_pipeline(
-                device,
-                &self.vertex_shader,
-                &self.fragment_shader,
-                &self.pipeline_layout,
-                sample_count,
-            );
-        }
-    }
 }
 
-pub struct SkyViewState {
-    pub bindings: Bindings,
-}
+pub fn sky_render_system(
+    mut bindings: Local<HashMap<Entity, Bindings>>,
+    mut pipeline: Local<SkyPipeline>,
+    mut encoder: ResMut<CommandEncoder>,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    view: Res<View>,
+    environment: Res<PreparedEnvironment>,
+    camera_query: Query<&PreparedCamera>,
+) {
+    pipeline.recreate_pipeline(&device, view.frame_buffer.sample_count());
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct RenderSky;
+    let bindings = bindings
+        .entry(view.camera)
+        .or_insert_with(|| pipeline.bindings_layout.create_bindings(&device));
 
-impl RenderViewPhase for RenderSky {
-    fn prepare(&mut self, context: &ViewPhaseContext, _world: &World, resources: &mut Resources) {
-        let sky_pipeline = if let Some(sky_pipeline) = resources.remove::<SkyPipeline>() {
-            sky_pipeline
-        } else {
-            let mut shader_processor = resources.get_mut::<ShaderProcessor>().unwrap();
+    let camera = camera_query.get(view.camera).unwrap();
 
-            SkyPipeline::new(
-                context.device,
-                &mut shader_processor,
-                context.target.sample_count(),
-            )
-        };
+    let sky_bindings = SkyBindings {
+        sky_texture: environment.sky.clone(),
+    };
 
-        let sky_texture = if let Some(environment) = resources.get::<PreparedEnvironment>() {
-            environment.sky.clone()
-        } else {
-            return;
-        };
+    bindings.bind(&device, &queue, camera);
+    bindings.bind(&device, &queue, &sky_bindings);
 
-        let state =
-            resources.get_id_or_insert_with::<SkyViewState>(context.view.camera.cast(), || {
-                SkyViewState {
-                    bindings: sky_pipeline.bindings_layout.create_bindings(context.device),
-                }
-            });
+    bindings.update_bind_groups(&device);
 
-        let bindings = SkyBindings {
-            camera: context.view.raw_camera,
-            sky_texture,
-        };
+    let mut render_pass = view
+        .frame_buffer
+        .begin_hdr_clear_pass(&mut encoder, Color::TRANSPARENT);
 
-        state
-            .bindings
-            .bind(context.device, context.queue, &bindings);
-        state.bindings.update_bind_groups(context.device);
+    render_pass.set_pipeline(&pipeline.render_pipeline);
 
-        resources.insert(sky_pipeline);
-    }
+    bindings.apply(&mut render_pass);
 
-    fn render(
-        &self,
-        context: &ViewPhaseContext,
-        encoder: &mut CommandEncoder,
-        _world: &World,
-        resources: &Resources,
-    ) {
-        let mut render_pass = context
-            .target
-            .begin_hdr_clear_pass(encoder, Color::TRANSPARENT);
-
-        if let Some(state) = resources.get_id::<SkyViewState>(context.view.camera) {
-            let pipeline = resources.get::<SkyPipeline>().unwrap();
-
-            render_pass.set_pipeline(&pipeline.render_pipeline);
-
-            state.bindings.apply(&mut render_pass);
-
-            render_pass.draw(0..3, 0..1);
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PhaseLabel)]
-pub enum SkyPhase {
-    Render,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SkyPlugin;
-
-impl RenderPlugin for SkyPlugin {
-    fn build(&self, builder: &mut RendererBuilder) {
-        builder.add_view_phase_after(CorePhase::Clear, SkyPhase::Render, RenderSky);
-    }
+    render_pass.draw(0..3, 0..1);
 }

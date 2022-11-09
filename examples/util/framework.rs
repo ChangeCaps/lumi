@@ -3,6 +3,7 @@ use std::time::Instant;
 use egui_wgpu_backend::ScreenDescriptor;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use futures_lite::future;
+use tracing_subscriber::layer::SubscriberExt;
 
 use lumi::core::*;
 use lumi::prelude::*;
@@ -21,6 +22,11 @@ pub trait App: 'static {
 pub fn framework<T: App>() -> ! {
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
+
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::registry().with(tracing_tracy::TracyLayer::new()),
+    )
+    .unwrap();
 
     let instance = Instance::new(Backends::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -47,13 +53,14 @@ pub fn framework<T: App>() -> ! {
         format: TextureFormat::Bgra8UnormSrgb,
         width: window.inner_size().width,
         height: window.inner_size().height,
-        present_mode: PresentMode::Immediate,
+        present_mode: PresentMode::Fifo,
         alpha_mode: CompositeAlphaMode::Auto,
     };
     let mut resized = true;
 
     let mut world = World::new();
-    let mut renderer = Renderer::builder().add_plugin(DefaultPlugin).build(&device);
+    let mut renderer = Renderer::new();
+    renderer.add_plugin(DefaultPlugin);
 
     let mut app = T::init(&mut world, &mut renderer);
 
@@ -108,6 +115,8 @@ pub fn framework<T: App>() -> ! {
             platform.update_time(start_time.elapsed().as_secs_f64());
             platform.begin_frame();
 
+            tracing_tracy::client::frame_mark();
+
             app.render(&mut world, &mut renderer, &platform.context());
 
             let target = surface.get_current_texture().unwrap();
@@ -118,7 +127,8 @@ pub fn framework<T: App>() -> ! {
                 height: configuration.height,
             };
 
-            renderer.render(&device, &queue, &world, &render_target);
+            renderer.extract(&device, &queue, &mut world);
+            renderer.render(&device, &queue, render_target);
 
             let full_output = platform.end_frame(Some(&window));
             let paint_jobs = platform.context().tessellate(full_output.shapes);

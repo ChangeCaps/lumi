@@ -1,5 +1,5 @@
 use egui::Vec2;
-use lumi::prelude::{Mat4, Vec3};
+use lumi::prelude::{Mat3, Vec3};
 use winit::event::{DeviceEvent, ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent};
 
 pub struct CameraController {
@@ -32,8 +32,8 @@ impl CameraController {
                     }
 
                     if self.translate {
-                        let right = self.rotation().transform_vector3(Vec3::X);
-                        let down = self.rotation().transform_vector3(-Vec3::Y);
+                        let right = self.rotation() * Vec3::X;
+                        let down = self.rotation() * -Vec3::Y;
 
                         let delta = right * delta.0 as f32 + down * delta.1 as f32;
 
@@ -66,13 +66,11 @@ impl CameraController {
         }
     }
 
-    pub fn rotation(&self) -> Mat4 {
-        Mat4::from_rotation_y(self.rotation.x) * Mat4::from_rotation_x(self.rotation.y)
+    pub fn rotation(&self) -> Mat3 {
+        Mat3::from_rotation_y(self.rotation.x) * Mat3::from_rotation_x(self.rotation.y)
     }
 
-    pub fn view(&self) -> Mat4 {
-        Mat4::from_translation(self.translation)
-            * self.rotation()
-            * Mat4::from_translation(Vec3::new(0.0, 0.0, self.distance))
+    pub fn translation(&self) -> Vec3 {
+        self.rotation() * Vec3::Z * self.distance + self.translation
     }
 }

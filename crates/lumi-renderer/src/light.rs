@@ -2,6 +2,8 @@ use lumi_bounds::{CascadeFrustum, Frustum};
 use lumi_macro::ShaderType;
 use lumi_util::math::{Mat4, Vec3};
 
+use shiv::world::Component;
+
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawPointLight {
     pub position: Vec3,
@@ -10,10 +12,8 @@ pub struct RawPointLight {
     pub range: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug)]
 pub struct PointLight {
-    /// The position of the light in world space.
-    pub position: Vec3,
     /// The color of the light.
     pub color: Vec3,
     /// The intensity of the light in lumens.
@@ -25,7 +25,6 @@ pub struct PointLight {
 impl Default for PointLight {
     fn default() -> Self {
         Self {
-            position: Vec3::ZERO,
             color: Vec3::ONE,
             intensity: 800.0,
             range: 20.0,
@@ -33,35 +32,12 @@ impl Default for PointLight {
     }
 }
 
-impl AsLight for PointLight {
-    fn as_light(light: &Light) -> Option<&Self> {
-        match light {
-            Light::Point(point) => Some(point),
-            _ => None,
-        }
-    }
-
-    fn as_light_mut(light: &mut Light) -> Option<&mut Self> {
-        match light {
-            Light::Point(point) => Some(point),
-            _ => None,
-        }
-    }
-
-    fn from_light(light: Light) -> Option<Self> {
-        match light {
-            Light::Point(point) => Some(point),
-            _ => None,
-        }
-    }
-}
-
 impl PointLight {
-    pub fn raw(&self) -> RawPointLight {
+    pub fn raw(&self, position: Vec3) -> RawPointLight {
         let intensity = self.intensity / (4.0 * std::f32::consts::PI);
 
         RawPointLight {
-            position: self.position,
+            position,
             color: self.color,
             intensity,
             range: self.range,
@@ -82,7 +58,7 @@ pub struct RawDirectionalLight {
     pub view_proj: Mat4,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug)]
 pub struct DirectionalLight {
     /// Translation of the shadow map projection.
     ///
@@ -122,35 +98,18 @@ impl Default for DirectionalLight {
     }
 }
 
-impl AsLight for DirectionalLight {
-    fn as_light(light: &Light) -> Option<&Self> {
-        match light {
-            Light::Directional(directional) => Some(directional),
-            _ => None,
-        }
-    }
-
-    fn as_light_mut(light: &mut Light) -> Option<&mut Self> {
-        match light {
-            Light::Directional(directional) => Some(directional),
-            _ => None,
-        }
-    }
-
-    fn from_light(light: Light) -> Option<Self> {
-        match light {
-            Light::Directional(directional) => Some(directional),
-            _ => None,
-        }
-    }
-}
-
 impl DirectionalLight {
     pub const CASCADES: u32 = 4;
 
     pub fn view(&self) -> Mat4 {
         let translation = Mat4::from_translation(self.translation);
-        translation * Mat4::look_at_rh(-self.direction, Vec3::ZERO, Vec3::Y)
+        let view = if self.direction.y.abs() > 0.999 {
+            Mat4::look_at_rh(-self.direction, Vec3::ZERO, Vec3::X)
+        } else {
+            Mat4::look_at_rh(-self.direction, Vec3::ZERO, Vec3::Y)
+        };
+
+        translation * view
     }
 
     pub fn cascade_size(&self, cascade: u32) -> f32 {
@@ -215,7 +174,7 @@ pub struct RawAmbientLight {
 
 impl Default for RawAmbientLight {
     fn default() -> Self {
-        Self { color: Vec3::ONE }
+        AmbientLight::default().raw()
     }
 }
 
@@ -238,53 +197,6 @@ impl AmbientLight {
     pub fn raw(&self) -> RawAmbientLight {
         RawAmbientLight {
             color: self.color * self.intensity,
-        }
-    }
-}
-
-pub trait AsLight: Sized {
-    fn as_light(light: &Light) -> Option<&Self>;
-    fn as_light_mut(light: &mut Light) -> Option<&mut Self>;
-    fn from_light(light: Light) -> Option<Self>;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Light {
-    Point(PointLight),
-    Directional(DirectionalLight),
-}
-
-impl AsLight for Light {
-    fn as_light(light: &Light) -> Option<&Self> {
-        Some(light)
-    }
-
-    fn as_light_mut(light: &mut Light) -> Option<&mut Self> {
-        Some(light)
-    }
-
-    fn from_light(light: Light) -> Option<Self> {
-        Some(light)
-    }
-}
-
-impl From<PointLight> for Light {
-    fn from(light: PointLight) -> Self {
-        Self::Point(light)
-    }
-}
-
-impl From<DirectionalLight> for Light {
-    fn from(light: DirectionalLight) -> Self {
-        Self::Directional(light)
-    }
-}
-
-impl Light {
-    pub fn shadows(&self) -> bool {
-        match self {
-            Light::Point(_) => false,
-            Light::Directional(directional) => directional.shadows,
         }
     }
 }

@@ -10,8 +10,9 @@ use lumi_core::{
 };
 use lumi_shader::{ShaderProcessor, ShaderRef};
 use lumi_util::math::Vec3;
+use shiv::world::{FromWorld, World};
 
-use crate::Renderer;
+use crate::RenderDevice;
 
 pub struct MipChain {
     pub texture: SharedTexture,
@@ -67,11 +68,55 @@ impl MipChain {
         }
     }
 
+    pub fn resize(
+        &mut self,
+        device: &Device,
+        width: u32,
+        height: u32,
+        mip_level_count: Option<u32>,
+    ) {
+        if self.width() == width
+            && self.height() == height
+            && self.mip_level_count == mip_level_count
+        {
+            return;
+        }
+
+        let mips = mip_level_count.unwrap_or(Self::mip_levels_for_size(width, height));
+        self.texture = device.create_shared_texture(&TextureDescriptor {
+            label: Some("Lumi MipChain texture"),
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: mips,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba16Float,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
+        });
+        self.view = self.texture.create_view(&Default::default());
+
+        self.views.clear();
+
+        for i in 0..mips {
+            let view = self.texture.create_view(&TextureViewDescriptor {
+                label: Some("Lumi MipChain view"),
+                base_mip_level: i,
+                mip_level_count: NonZeroU32::new(1),
+                ..Default::default()
+            });
+
+            self.views.push(view);
+        }
+    }
+
     pub fn mip_levels_for_size(width: u32, height: u32) -> u32 {
         let min_dimension = u32::min(width, height);
 
         let mut mip_levels = 1;
-        while min_dimension >> mip_levels > 4 {
+        while min_dimension >> mip_levels > 8 {
             mip_levels += 1;
         }
 
@@ -202,18 +247,9 @@ pub struct MipChainPipeline {
     pub upsample_pipeline: RenderPipeline,
 }
 
-impl MipChainPipeline {
-    pub fn init(renderer: &mut Renderer, device: &Device) {
-        if renderer.resources.contains::<Self>() {
-            return;
-        }
-
-        let shader_processor = renderer.resources.get_mut::<ShaderProcessor>().unwrap();
-        let pipeline = Self::new(device, shader_processor);
-        renderer.resources.insert(pipeline);
-    }
-
-    pub fn new(device: &Device, shader_processor: &mut ShaderProcessor) -> Self {
+impl FromWorld for MipChainPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let mut shader_processor = world.resource_mut::<ShaderProcessor>();
         let mut vertex = shader_processor
             .process(
                 ShaderRef::module("lumi/fullscreen_vert.wgsl"),
@@ -238,6 +274,7 @@ impl MipChainPipeline {
             .with_shader(&fragment)
             .bind::<UpsampleBindings>();
 
+        let device = world.resource::<RenderDevice>();
         let bind_group_layouts = down_layout.create_bind_group_layouts(device);
         let bind_group_layouts = bind_group_layouts.iter().collect::<Vec<_>>();
         let downsample_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {

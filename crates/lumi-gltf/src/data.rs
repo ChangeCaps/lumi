@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use lumi_core::{FilterMode, Image, ImageData, TextureFormat};
-use lumi_material::{MeshNode, Primitive, StandardMaterial};
+use lumi_material::{Primitive, Primitives, StandardMaterial};
 use lumi_mesh::Mesh;
 use lumi_util::math::Mat4;
 
@@ -17,7 +17,7 @@ pub struct GltfData {
     pub document: gltf::Document,
     pub textures: Vec<Image>,
     pub materials: Vec<StandardMaterial>,
-    pub meshes: Vec<MeshNode>,
+    pub meshes: Vec<Primitives>,
 }
 
 impl GltfData {
@@ -57,35 +57,39 @@ impl GltfData {
         Ok(Self::new(document, &buffers, &images))
     }
 
-    pub fn create_mesh_node(&self) -> MeshNode {
-        let mut mesh_node = MeshNode::default();
+    pub fn create_primitives(&self) -> Primitives {
+        let mut primitives = Primitives::default();
 
         if let Some(scene) = self.document.default_scene() {
             for node in scene.nodes() {
-                self.append_mesh_node(&mut mesh_node, node, Mat4::IDENTITY);
+                self.append_mesh_node(&mut primitives, node, Mat4::IDENTITY);
             }
         }
 
-        mesh_node
+        primitives
     }
 
-    fn append_mesh_node(&self, mesh_node: &mut MeshNode, node: gltf::Node, global_transform: Mat4) {
+    fn append_mesh_node(
+        &self,
+        primitives: &mut Primitives,
+        node: gltf::Node,
+        global_transform: Mat4,
+    ) {
         let transform = global_transform * Mat4::from_cols_array_2d(&node.transform().matrix());
 
         if let Some(mesh) = node.mesh() {
             let mesh = &self.meshes[mesh.index()];
-            let transform = transform * mesh.transform;
 
             for primitive in mesh.primitives.iter() {
                 let mut mesh = primitive.mesh.clone();
                 mesh.transform(transform);
 
-                mesh_node.add_primitive(primitive.material.clone(), mesh);
+                primitives.add(primitive.material.clone(), mesh);
             }
         }
 
         for child in node.children() {
-            self.append_mesh_node(mesh_node, child, transform);
+            self.append_mesh_node(primitives, child, transform);
         }
     }
 
@@ -187,15 +191,15 @@ impl GltfData {
         standard
     }
 
-    fn load_mesh(&self, mesh: gltf::Mesh, data: &[gltf::buffer::Data]) -> MeshNode {
-        let mut mesh_node = MeshNode::default();
+    fn load_mesh(&self, mesh: gltf::Mesh, data: &[gltf::buffer::Data]) -> Primitives {
+        let mut primitives = Primitives::default();
 
         for primitive in mesh.primitives() {
             let primitive = self.load_primitive(primitive, data);
-            mesh_node.primitives.push(primitive);
+            primitives.primitives.push(primitive);
         }
 
-        mesh_node
+        primitives
     }
 
     fn load_primitive(&self, primitive: gltf::Primitive, data: &[gltf::buffer::Data]) -> Primitive {
