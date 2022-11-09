@@ -1,42 +1,69 @@
 mod draw;
 mod material;
-mod mesh_node;
 mod prepare;
-mod render;
+mod primitive;
 mod standard;
 mod unlit;
 
 pub use draw::*;
 pub use material::*;
-pub use mesh_node::*;
 pub use prepare::*;
-pub use render::*;
+pub use primitive::*;
 pub use standard::*;
 pub use unlit::*;
 
-use lumi_core::Device;
-use lumi_renderer::{
-    CorePhase, MipChainPipeline, PhaseLabel, RenderPlugin, Renderer, RendererBuilder,
-};
+use lumi_renderer::{ExtractStage, RenderStage, RenderSystem, Renderer, RendererPlugin};
+use shiv::schedule::{IntoSystemDescriptor, SystemLabel};
 
-#[derive(PhaseLabel)]
-pub enum MaterialPhase {
-    Render,
+use std::marker::PhantomData;
+
+#[derive(SystemLabel)]
+pub enum MaterialSystem {
+    Extract,
+    Prepare,
+    Bindings,
+    Draw,
 }
 
-#[derive(Default)]
-pub struct MaterialPlugin;
+pub struct MaterialPlugin<T: Material> {
+    marker: PhantomData<T>,
+}
 
-impl RenderPlugin for MaterialPlugin {
-    fn build(&self, builder: &mut RendererBuilder) {
-        builder.add_view_phase_after(
-            CorePhase::Render,
-            MaterialPhase::Render,
-            RenderMaterials::default(),
-        );
+impl<T: Material> Default for MaterialPlugin<T> {
+    fn default() -> Self {
+        Self {
+            marker: PhantomData,
+        }
     }
+}
 
-    fn init(&self, renderer: &mut Renderer, device: &Device) {
-        MipChainPipeline::init(renderer, device);
+impl<T: Material> RendererPlugin for MaterialPlugin<T> {
+    fn build(&self, renderer: &mut Renderer) {
+        renderer.world.init_resource::<PreparedMaterialPipelines>();
+
+        renderer.extract.add_system_to_stage(
+            ExtractStage::Extract,
+            extract_material_system::<T>.label(MaterialSystem::Extract),
+        );
+
+        renderer
+            .render
+            .add_system_to_stage(
+                RenderStage::Prepare,
+                prepare_material_system::<T>
+                    .label(MaterialSystem::Prepare)
+                    .after(RenderSystem::ScreenSpaceResize)
+                    .after(RenderSystem::PrepareCamera),
+            )
+            .add_system_to_stage(
+                RenderStage::Prepare,
+                update_bindings_system
+                    .label(MaterialSystem::Bindings)
+                    .after(MaterialSystem::Prepare),
+            )
+            .add_system_to_stage(
+                RenderStage::Draw,
+                draw_material_system::<T>.label(MaterialSystem::Draw),
+            );
     }
 }

@@ -3,10 +3,11 @@ use lumi_core::Image;
 use lumi_macro::ShaderType;
 use lumi_shader::{ShaderDefs, ShaderRef};
 use lumi_util::math::{Vec3, Vec4};
+use shiv::{storage::DenseStorage, world::Component};
 
 use crate::Material;
 
-#[derive(Clone, Debug, Bind)]
+#[derive(Clone, Debug, PartialEq, Bind)]
 #[uniform(RawStandardMaterial = "standard_material")]
 pub struct StandardMaterial<T = Image> {
     #[texture]
@@ -71,6 +72,10 @@ impl Default for StandardMaterial {
             absorption: Vec3::ZERO,
         }
     }
+}
+
+impl<T: Send + Sync + 'static> Component for StandardMaterial<T> {
+    type Storage = DenseStorage;
 }
 
 #[derive(Clone, Copy, ShaderType)]
@@ -169,10 +174,5 @@ impl Material for StandardMaterial {
     #[inline]
     fn is_translucent(&self) -> bool {
         self.base_color.w < 1.0 || self.transmission > 0.0
-    }
-
-    #[inline]
-    fn use_ssr(&self) -> bool {
-        self.transmission > 0.0
     }
 }

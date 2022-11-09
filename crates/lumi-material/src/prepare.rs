@@ -1,5 +1,6 @@
 use std::any::TypeId;
 
+use deref_derive::{Deref, DerefMut};
 use lumi_bind::BindingsLayout;
 use lumi_core::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
@@ -7,33 +8,65 @@ use lumi_core::{
     RenderPipelineDescriptor, SharedDevice, SharedRenderPipeline, StencilState, TextureFormat,
     VertexAttribute, VertexBufferLayout, VertexState, VertexStepMode,
 };
-use lumi_id::Id;
+use lumi_id::{Id, IdMap};
 use lumi_renderer::{
-    CameraBindings, IntegratedBrdf, PreparedEnvironment, PreparedLights, PreparedShadows,
-    PreparedTransform,
+    IntegratedBrdf, PreparedCamera, PreparedEnvironment, PreparedLights, PreparedShadows,
+    PreparedTransform, ScreenSpaceBindings,
 };
 use lumi_shader::{ShaderDefs, ShaderProcessor};
 
-use crate::{Material, MaterialPipeline, SsrBindings};
+use crate::{Material, MaterialPipeline};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PreparedMaterialPipelineKey {
     pub material_type: TypeId,
     pub shader_defs: ShaderDefs,
+    pub sample_count: u32,
 }
 
 impl PreparedMaterialPipelineKey {
     #[inline]
-    pub fn new<T: Material>(material: &T) -> Self {
+    pub fn new<T: Material>(material: &T, sample_count: u32) -> Self {
         Self {
             material_type: TypeId::of::<T>(),
             shader_defs: material.shader_defs(),
+            sample_count,
         }
     }
 
     #[inline]
     pub fn id(&self) -> Id<PreparedMaterialPipeline> {
         Id::from_hash(self)
+    }
+}
+
+#[derive(Default, Deref, DerefMut)]
+pub struct PreparedMaterialPipelines {
+    pub pipelines: IdMap<PreparedMaterialPipeline>,
+}
+
+impl PreparedMaterialPipelines {
+    #[inline]
+    pub fn get_or_create<T: Material>(
+        &mut self,
+        device: &Device,
+        key: &PreparedMaterialPipelineKey,
+        shader_processor: &mut ShaderProcessor,
+    ) -> &PreparedMaterialPipeline {
+        let id = key.id();
+
+        if !self.contains_id(id) {
+            let pipeline = PreparedMaterialPipeline::new::<T>(
+                device,
+                &key.shader_defs,
+                shader_processor,
+                key.sample_count,
+            );
+
+            self.insert(id, pipeline);
+        }
+
+        self.get(id).unwrap()
     }
 }
 
@@ -74,13 +107,13 @@ impl PreparedMaterialPipeline {
         let bindings_layout = BindingsLayout::new()
             .with_shader(&material_pipeline.vertex_shader)
             .with_shader(&material_pipeline.fragment_shader)
-            .bind::<CameraBindings>()
+            .bind::<PreparedCamera>()
             .bind::<PreparedTransform>()
             .bind::<IntegratedBrdf>()
             .bind::<PreparedLights>()
             .bind::<PreparedEnvironment>()
             .bind::<PreparedShadows>()
-            .bind::<SsrBindings>()
+            .bind::<ScreenSpaceBindings>()
             .bind::<T>();
 
         let pipeline_layout = bindings_layout.create_pipeline_layout(device);
@@ -114,29 +147,6 @@ impl PreparedMaterialPipeline {
             opaque_pipeline,
             transparent_pipeline,
         }
-    }
-
-    pub fn recreate_pipeline(&mut self, device: &Device, sample_count: u32) {
-        self.prepass_pipeline = Self::create_prepass_pipeline(
-            device,
-            &self.pipeline_layout,
-            &mut self.material_pipeline,
-            sample_count,
-        );
-
-        self.opaque_pipeline = Self::create_opaque_pipeline(
-            device,
-            &self.pipeline_layout,
-            &mut self.material_pipeline,
-            sample_count,
-        );
-
-        self.transparent_pipeline = Self::create_transparent_pipeline(
-            device,
-            &self.pipeline_layout,
-            &mut self.material_pipeline,
-            sample_count,
-        );
     }
 
     pub fn create_prepass_pipeline(

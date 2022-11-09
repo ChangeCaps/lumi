@@ -4,6 +4,7 @@ use lumi_bind::Bind;
 use lumi_core::VertexFormat;
 use lumi_mesh::Mesh;
 use lumi_shader::{DefaultShader, Shader, ShaderDefs, ShaderDefsHash, ShaderRef};
+use shiv::world::Component;
 
 #[derive(Clone, Debug)]
 pub struct MeshVertexLayout {
@@ -28,7 +29,7 @@ impl MaterialPipeline {
     }
 }
 
-pub trait Material: Bind + Send + Sync + 'static {
+pub trait Material: Bind + Clone + Component {
     #[inline(always)]
     fn vertex_shader() -> ShaderRef {
         ShaderRef::Default(DefaultShader::Vertex)
@@ -77,11 +78,6 @@ pub trait Material: Bind + Send + Sync + 'static {
 
     #[inline(always)]
     fn is_translucent(&self) -> bool {
-        false
-    }
-
-    #[inline(always)]
-    fn use_ssr(&self) -> bool {
         false
     }
 }
