@@ -128,7 +128,7 @@ pub fn framework<T: App>() -> ! {
             };
 
             renderer.extract(&device, &queue, &mut world);
-            renderer.render(&device, &queue, render_target);
+            //renderer.render(&device, &queue, render_target);
 
             let full_output = platform.end_frame(Some(&window));
             let paint_jobs = platform.context().tessellate(full_output.shapes);

@@ -124,7 +124,9 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, device: &Device, queue: &Queue, target: RenderTarget) {
+    pub fn render(&mut self, device: &Device, queue: &Queue, camera: Entity, target: RenderTarget) {
+        let camera_entity = camera;
+
         self.prepare_frame_buffers(device, &target);
 
         guard!(device);
@@ -133,26 +135,23 @@ impl Renderer {
         self.world.insert_resource::<OwnedPtr<Device>>(device);
         self.world.insert_resource::<OwnedPtr<Queue>>(queue);
 
-        let camera_query = self.world.query_filtered::<Entity, With<Camera>>();
-        let cameras = camera_query.iter(&self.world).collect::<Vec<_>>();
+        let camera = self.world.entity(camera_entity);
+        let camera = camera.get::<Camera>().expect("camera not found");
 
-        for entity in cameras {
-            let camera = self.world.entity(entity).get::<Camera>().unwrap().clone();
-            let target = camera.target.get_view(&target);
-            guard!(target);
+        let target = camera.target.get_view(&target);
+        guard!(target);
 
-            let frame_buffer = self.frame_buffers[&entity].clone();
+        let frame_buffer = self.frame_buffers[&camera_entity].clone();
 
-            let view = View {
-                camera: entity,
-                frame_buffer,
-                target,
-            };
+        let view = View {
+            camera: camera_entity,
+            frame_buffer,
+            target,
+        };
 
-            self.world.insert_resource(view);
-            self.view.run_once(&mut self.world);
-            self.world.remove_resource::<View>();
-        }
+        self.world.insert_resource(view);
+        self.view.run_once(&mut self.world);
+        self.world.remove_resource::<View>();
 
         self.world.remove_resource::<OwnedPtr<Device>>();
         let queue = self
