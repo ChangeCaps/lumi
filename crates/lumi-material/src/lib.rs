@@ -6,14 +6,18 @@ mod standard;
 mod unlit;
 
 pub use draw::*;
+use lumi_mesh::Mesh;
 pub use material::*;
 pub use prepare::*;
 pub use primitive::*;
 pub use standard::*;
 pub use unlit::*;
 
-use lumi_renderer::{ExtractStage, Renderer, RendererPlugin, ViewStage, ViewSystem};
-use shiv::schedule::{IntoSystemDescriptor, SystemLabel};
+use lumi_renderer::{ExtractStage, Renderer, RendererPlugin, Transform, ViewStage, ViewSystem};
+use shiv::{
+    bundle::Bundle,
+    schedule::{IntoSystemDescriptor, SystemLabel},
+};
 
 use std::marker::PhantomData;
 
@@ -59,6 +63,14 @@ impl<T: ExtractMaterials> RendererPlugin for ExtractMaterialPlugin<T> {
                 draw_material_system::<T>.label(MaterialSystem::Draw),
             );
     }
+}
+
+#[derive(Clone, Debug, Default, Bundle)]
+pub struct MaterialBundle<T: Material> {
+    pub material: T,
+    pub mesh: Mesh,
+    pub transform: Transform,
+    pub global_transform: Transform,
 }
 
 pub struct MaterialPlugin<T: Material> {
