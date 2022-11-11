@@ -13,7 +13,9 @@ pub use primitive::*;
 pub use standard::*;
 pub use unlit::*;
 
-use lumi_renderer::{ExtractStage, Renderer, RendererPlugin, Transform, ViewStage, ViewSystem};
+use lumi_renderer::{
+    ExtractStage, GlobalTransform, Renderer, RendererPlugin, Transform, ViewStage, ViewSystem,
+};
 use shiv::{
     bundle::Bundle,
     schedule::{IntoSystemDescriptor, SystemLabel},
@@ -66,11 +68,11 @@ impl<T: ExtractMaterials> RendererPlugin for ExtractMaterialPlugin<T> {
 }
 
 #[derive(Clone, Debug, Default, Bundle)]
-pub struct MaterialBundle<T: Material> {
+pub struct MaterialBundle<T: Material = StandardMaterial> {
     pub material: T,
     pub mesh: Mesh,
     pub transform: Transform,
-    pub global_transform: Transform,
+    pub global_transform: GlobalTransform,
 }
 
 pub struct MaterialPlugin<T: Material> {
