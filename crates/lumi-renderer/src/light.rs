@@ -2,7 +2,8 @@ use lumi_bounds::{CascadeFrustum, Frustum};
 use lumi_macro::ShaderType;
 use lumi_util::math::{Mat4, Vec3};
 
-use shiv::world::Component;
+use shiv::{bundle::Bundle, world::Component};
+use shiv_transform::{GlobalTransform, Transform};
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawPointLight {
@@ -43,6 +44,13 @@ impl PointLight {
             range: self.range,
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Bundle)]
+pub struct PointLightBundle {
+    pub light: PointLight,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
 }
 
 #[derive(Clone, Copy, Debug, Default, ShaderType)]
@@ -165,6 +173,13 @@ impl DirectionalLight {
             view_proj: self.view_proj(0),
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Bundle)]
+pub struct DirectionalLightBundle {
+    pub light: DirectionalLight,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
 }
 
 #[derive(Clone, Copy, Debug, ShaderType)]

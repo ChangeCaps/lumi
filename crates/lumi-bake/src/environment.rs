@@ -417,11 +417,13 @@ impl BakedEnvironment {
         path: impl AsRef<Path>,
         indirect_size: u32,
         irradiance_size: u32,
-        sky_size: u32,
+        sky_size: Option<u32>,
     ) -> image::ImageResult<Self> {
-        let eq = image::open(path)?;
-        let eq = eq.to_rgba16();
+        let image = image::open(path)?;
+        let eq = image.to_rgba16();
         let bytes = bytemuck::cast_slice(eq.as_raw());
+
+        let sky_size = sky_size.unwrap_or(eq.height());
 
         Ok(Self::from_eq_bytes(
             device,

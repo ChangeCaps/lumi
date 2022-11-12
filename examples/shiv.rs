@@ -1,7 +1,6 @@
 use lumi::prelude::*;
 use lumi::LumiPlugin;
 
-use lumi_material::MaterialBundle;
 use shiv::prelude::*;
 use shiv_app::App;
 use shiv_app::AppExit;
@@ -29,11 +28,20 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    commands
-        .spawn()
-        .insert(Camera::default())
-        .insert(Transform::from_xyz(0.0, 0.0, 20.0))
-        .insert(GlobalTransform::default());
+    commands.spawn().insert(PerspectiveCameraBundle {
+        transform: Transform::from_xyz(0.0, 0.0, 10.0),
+        ..Default::default()
+    });
+
+    commands.spawn().insert(DirectionalLightBundle {
+        light: DirectionalLight {
+            direction: Vec3::new(-1.0, -1.0, -1.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    commands.insert_resource(Environment::open("sky.hdr").unwrap());
 
     for x in -5..=5 {
         for y in -5..=5 {

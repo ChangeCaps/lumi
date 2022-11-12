@@ -30,12 +30,41 @@ fn direction(id: vec2<u32>, side: u32, dimensions: vec2<i32>) -> vec3<f32> {
 	return normalize(direction);
 }
 
+fn direction_to_angles(direction: vec3<f32>) -> vec2<f32> {
+	let theta = atan2(direction.z, direction.x);
+	let phi = asin(direction.y);
+	return vec2<f32>(theta, phi);
+}
+
+fn direction_to_uv(texture: texture_2d<u32>, direction: vec3<f32>) -> vec2<f32> {
+	let angles = direction_to_angles(direction);
+	let uv = vec2<f32>(angles.x / PI / 2.0, -angles.y / PI) + 0.5;
+	return uv;
+}
+
+fn sample_environment(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f32> {
+	let dimensions = textureDimensions(texture);
+	let uv = direction_to_uv(texture, direction) * vec2<f32>(dimensions);
+	let base = vec2<i32>(floor(uv));
+	let offset = uv - vec2<f32>(base);
+
+	let a = vec4<f32>(textureLoad(texture, base + vec2<i32>(0, 0), 0)) / 65535.0 * 4.0;
+	let b = vec4<f32>(textureLoad(texture, base + vec2<i32>(1, 0), 0)) / 65535.0 * 4.0;
+	let c = vec4<f32>(textureLoad(texture, base + vec2<i32>(0, 1), 0)) / 65535.0 * 4.0;
+	let d = vec4<f32>(textureLoad(texture, base + vec2<i32>(1, 1), 0)) / 65535.0 * 4.0;
+
+	let ab = mix(a, b, offset.x);
+	let cd = mix(c, d, offset.x);
+
+	return mix(ab, cd, offset.y);
+}
+
 fn load_eq(texture: texture_2d<u32>, angles: vec2<f32>) -> vec4<f32> {
 	let dimensions = textureDimensions(texture);
 	let uv = vec2<f32>(angles.x / PI / 2.0, -angles.y / PI) + 0.5;
 	var index = vec2<i32>(uv * vec2<f32>(dimensions));
 	index.x = clamp(index.x, 0, dimensions.x - 1);
-	return vec4<f32>(textureLoad(texture, index, 0)) / 65535.0 * 4.0;	
+	return vec4<f32>(textureLoad(texture, index, 0)) / 65535.0 * 4.0;
 }
 
 fn load_eq_dir(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f32> {
@@ -46,7 +75,7 @@ fn load_eq_dir(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f32> {
 @compute @workgroup_size(16, 16, 1)
 fn eq_to_cube(@builtin(global_invocation_id) global_id: vec3<u32>) {
 	let direction = direction(global_id.xy, global_id.z, textureDimensions(cube));
-	let color = load_eq_dir(eq, direction);
+	let color = sample_environment(eq, direction);
 	textureStore(cube, vec2<i32>(global_id.xy), i32(global_id.z), color);
 }
 

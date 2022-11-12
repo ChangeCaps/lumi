@@ -1,6 +1,6 @@
-#![deny(unsafe_op_in_unsafe_fn)]
 #![doc(html_favicon_url = "https://i.imgur.com/XTQGS8H.png")]
 #![doc(html_logo_url = "https://i.imgur.com/XTQGS8H.png")]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 #[cfg(feature = "shiv-plugin")]
 mod shiv_plugin;
@@ -31,11 +31,15 @@ pub mod prelude {
     #[cfg(feature = "gltf")]
     pub use lumi_gltf::OpenGltfExt;
     pub use lumi_macro::*;
-    pub use lumi_material::{Material, MaterialPlugin, Primitive, Primitives, StandardMaterial};
+    pub use lumi_material::{
+        Material, MaterialBundle, MaterialPlugin, Primitive, Primitives, StandardMaterial,
+    };
     pub use lumi_mesh::{shape, Mesh, MeshId};
     pub use lumi_renderer::{
-        Camera, DirectionalLight, Entity, Environment, GlobalTransform, Mut, OwnedPtr, OwnedPtrMut,
-        PointLight, Query, QueryState, Renderer, RendererPlugin, Transform, With, Without, World,
+        Camera, DirectionalLight, DirectionalLightBundle, Entity, Environment, GlobalTransform,
+        Mut, Orthographic, OrthographicCameraBundle, OwnedPtr, OwnedPtrMut, Perspective,
+        PerspectiveCameraBundle, PointLight, PointLightBundle, Query, QueryState, Renderer,
+        RendererPlugin, Transform, With, Without, World,
     };
     pub use lumi_shader::{DefaultShader, Shader, ShaderDefs, ShaderRef};
     pub use lumi_util::math::*;

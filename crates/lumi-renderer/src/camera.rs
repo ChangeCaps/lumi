@@ -2,7 +2,8 @@ use lumi_bounds::{CameraFrustum, Frustum};
 use lumi_core::{RenderTarget, SharedTextureView, TextureView};
 use lumi_macro::ShaderType;
 use lumi_util::math::{Mat4, Vec3};
-use shiv::world::Component;
+use shiv::{prelude::Bundle, world::Component};
+use shiv_transform::{GlobalTransform, Transform};
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RawCamera {
@@ -30,7 +31,7 @@ pub struct Perspective {
 impl Default for Perspective {
     fn default() -> Self {
         Self {
-            fov: 45.0,
+            fov: 70.0,
             aspect: 1.0,
             near: 0.1,
         }
@@ -327,6 +328,59 @@ impl Camera {
             inverse_view_proj: self.view_proj_with_aspect(view, aspect).inverse(),
             ev100: self.ev100(),
             exposure: self.exposure(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Bundle)]
+pub struct PerspectiveCameraBundle {
+    pub camera: Camera,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+}
+
+impl Default for PerspectiveCameraBundle {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            camera: Camera {
+                projection: Projection::Perspective(Perspective {
+                    fov: 70.0,
+                    near: 0.1,
+                    aspect: 1.0,
+                }),
+                ..Default::default()
+            },
+            transform: Transform::default(),
+            global_transform: GlobalTransform::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Bundle)]
+pub struct OrthographicCameraBundle {
+    pub camera: Camera,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+}
+
+impl Default for OrthographicCameraBundle {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            camera: Camera {
+                projection: Projection::Orthographic(Orthographic {
+                    left: -5.0,
+                    right: 5.0,
+                    bottom: -5.0,
+                    top: 5.0,
+                    near: -100.0,
+                    far: 100.0,
+                }),
+                ..Default::default()
+            },
+            transform: Transform::default(),
+            global_transform: GlobalTransform::default(),
         }
     }
 }
