@@ -25,10 +25,10 @@ lumi-renderer = { path = "crates/lumi-renderer", version = "0.1.0" }
 lumi-shader = { path = "crates/lumi-shader", version = "0.1.0" }
 lumi-util = { path = "crates/lumi-util", version = "0.1.0" }
 
-shiv = { path = "../shiv", optional = true }
-shiv-app = { path = "../shiv/shiv-app", optional = true }
-shiv-wgpu = { path = "../shiv/shiv-wgpu", optional = true }
-shiv-window = { path = "../shiv/shiv-window", optional = true }
+shiv = { git = "https://github.com/ChangeCaps/shiv", optional = true }
+shiv-app = { git = "https://github.com/ChangeCaps/shiv", optional = true }
+shiv-wgpu = { git = "https://github.com/ChangeCaps/shiv", optional = true }
+shiv-window = { git = "https://github.com/ChangeCaps/shiv", optional = true }
 tracing-log = "0.1"
 
 [features]

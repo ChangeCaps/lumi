@@ -17,5 +17,5 @@ lumi-shader = { path = "../lumi-shader", version = "0.1.0" }
 lumi-util = { path = "../lumi-util", version = "0.1.0" }
 
 deref-derive = "0.1"
-shiv = { path = "../../../shiv" }
-shiv-transform = { path = "../../../shiv/shiv-transform" }
+shiv = { git = "https://github.com/ChangeCaps/shiv" }
+shiv-transform = { git = "https://github.com/ChangeCaps/shiv" }
