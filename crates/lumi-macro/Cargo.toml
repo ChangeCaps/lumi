@@ -13,6 +13,6 @@ lumi-bake = { path = "../lumi-bake", version = "0.1.0" }
 
 proc-macro2 = "1.0"
 proc-macro-crate = "1.1"
-encase_derive_impl = "0.3"
+encase_derive_impl = "0.4"
 syn = "1.0"
 quote = "1.0"

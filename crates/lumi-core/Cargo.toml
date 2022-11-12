@@ -9,7 +9,7 @@ edition = "2021"
 lumi-id = { path = "../lumi-id", version = "0.1.0" }
 lumi-util = { path = "../lumi-util", version = "0.1.0" }
 
-encase = { version = "0.3", features = ["glam", "smallvec"] }
+encase = { version = "0.4", features = ["glam", "smallvec"] }
 image = { version = "0.24", optional = true }
 wgpu = "0.14"
 
