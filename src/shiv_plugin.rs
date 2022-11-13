@@ -7,7 +7,7 @@ use shiv::{
 };
 use shiv_app::{App, CoreStage, Plugin, Plugins};
 use shiv_wgpu::{WgpuPlugin, WindowSurfaces};
-use shiv_window::{RedrawRequested, Windows};
+use shiv_window::{WindowRedrawRequested, Windows};
 
 use crate::DefaultPlugin;
 
@@ -24,7 +24,7 @@ pub fn lumi_extract_system(world: &mut World) {
 }
 
 pub fn lumi_render_system(
-    mut redraw_events: EventReader<RedrawRequested>,
+    mut redraw_events: EventReader<WindowRedrawRequested>,
     mut renderer: ResMut<Renderer>,
     device: Res<Device>,
     queue: Res<Queue>,

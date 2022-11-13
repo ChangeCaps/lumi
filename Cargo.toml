@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 members = ["crates/*"]
 
 [dev-dependencies]
-shiv-transform = { path = "../shiv/shiv-transform" }
+shiv-transform = { git = "https://github.com/ChangeCaps/shiv" }
 
 [dependencies]
 lumi-bake = { path = "crates/lumi-bake", version = "0.1.0" }
