@@ -1,5 +1,5 @@
 use lumi_core::{Device, Queue, RenderTarget};
-use lumi_renderer::{Camera, CameraTarget, Entity, Query, Renderer, World};
+use lumi_renderer::{Camera, CameraTarget, Entity, Query, Renderer, TransformPlugin, World};
 use shiv::{
     prelude::EventReader,
     schedule::{IntoSystemDescriptor, StageLabel, SystemLabel, SystemStage},
@@ -125,5 +125,6 @@ impl Plugin for LumiPlugin {
 
     fn dependencies(&self, plugins: &mut Plugins) {
         plugins.add(WgpuPlugin);
+        plugins.add(TransformPlugin);
     }
 }

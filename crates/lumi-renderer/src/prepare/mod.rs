@@ -42,10 +42,6 @@ impl RendererPlugin for CoreExtractPlugin {
                 insert_state_system.label(ExtractSystem::Shadow),
             )
             .add_system_to_stage(
-                ExtractStage::PreExtract,
-                clear_extracted_meshes_system.label(ExtractSystem::Mesh),
-            )
-            .add_system_to_stage(
                 ExtractStage::Extract,
                 extract_transform_system.label(ExtractSystem::Transform),
             )

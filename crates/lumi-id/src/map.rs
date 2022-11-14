@@ -137,6 +137,7 @@ pub struct IdMap<K: ?Sized, V = K> {
 }
 
 impl<K: ?Sized, V> Default for IdMap<K, V> {
+    #[inline]
     fn default() -> Self {
         Self {
             map: HashMap::default(),
@@ -204,6 +205,11 @@ impl<K: ?Sized, V> IdMap<K, V> {
     }
 
     #[inline(always)]
+    pub fn retain(&mut self, f: impl FnMut(&Id<K>, &mut V) -> bool) {
+        self.map.retain(f)
+    }
+
+    #[inline(always)]
     pub fn keys(&self) -> impl Iterator<Item = &Id<K>> {
         self.map.keys()
     }
@@ -230,6 +236,7 @@ impl<K: ?Sized, V> IdMap<K, V> {
 }
 
 impl<K: ?Sized, V> FromIterator<(Id<K>, V)> for IdMap<K, V> {
+    #[inline]
     fn from_iter<T: IntoIterator<Item = (Id<K>, V)>>(iter: T) -> Self {
         Self {
             map: iter.into_iter().collect(),
