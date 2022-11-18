@@ -1,8 +1,4 @@
-use std::{
-    iter,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use std::{iter, marker::PhantomData};
 
 use deref_derive::{Deref, DerefMut};
 use lumi_bounds::Aabb;
@@ -34,25 +30,9 @@ pub struct PreparedMesh {
     pub draw: DrawCommand,
 }
 
-#[derive(Default)]
+#[derive(Default, Deref, DerefMut)]
 pub struct PreparedMeshes {
     pub meshes: IdMap<Mesh, PreparedMesh>,
-}
-
-impl Deref for PreparedMeshes {
-    type Target = IdMap<Mesh, PreparedMesh>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.meshes
-    }
-}
-
-impl DerefMut for PreparedMeshes {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.meshes
-    }
 }
 
 impl PreparedMeshes {
