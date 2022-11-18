@@ -164,12 +164,35 @@ impl Mesh {
             lumi_core::DrawCommand::Indexed {
                 indices: 0..indices.len() as u32,
                 base_vertex: 0,
+                instances: 0..1,
             }
         } else {
             let len = self.positions().map_or(0, |positions| positions.len());
 
             lumi_core::DrawCommand::Vertex {
                 vertices: 0..len as u32,
+                instances: 0..1,
+            }
+        }
+    }
+
+    #[cfg(feature = "lumi-core")]
+    pub fn draw_command_instanced(
+        &self,
+        instances: std::ops::Range<u32>,
+    ) -> lumi_core::DrawCommand {
+        if let Some(indices) = self.indices() {
+            lumi_core::DrawCommand::Indexed {
+                indices: 0..indices.len() as u32,
+                base_vertex: 0,
+                instances,
+            }
+        } else {
+            let len = self.positions().map_or(0, |positions| positions.len());
+
+            lumi_core::DrawCommand::Vertex {
+                vertices: 0..len as u32,
+                instances,
             }
         }
     }

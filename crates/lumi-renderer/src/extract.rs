@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use shiv::{
+    prelude::{EventReader, EventWriter},
     query::{Query, With},
     system::{
         Commands, ReadOnlySystemParamFetch, ResState, SystemMeta, SystemParam, SystemParamFetch,
@@ -12,6 +13,11 @@ use shiv::{
 use crate::OwnedPtrMut;
 
 pub type MainWorld = OwnedPtrMut<World>;
+
+#[derive(Clone, Copy, Debug)]
+pub struct DespawnExtracted {
+    pub entity: Entity,
+}
 
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct Extracted;
@@ -29,15 +35,21 @@ impl Extracted {
         }
     }
 
-    pub fn despawn_system(
-        mut commands: Commands,
+    pub fn detection_system(
+        mut events: EventWriter<DespawnExtracted>,
         extract_query: Extract<Query<()>>,
         extracted_query: Query<Entity, With<Extracted>>,
     ) {
         for entity in extracted_query.iter() {
             if !extract_query.contains(entity) {
-                commands.entity(entity).despawn();
+                events.send(DespawnExtracted { entity });
             }
+        }
+    }
+
+    pub fn despawn_system(mut commands: Commands, mut events: EventReader<DespawnExtracted>) {
+        for event in events.iter() {
+            commands.entity(event.entity).despawn();
         }
     }
 }

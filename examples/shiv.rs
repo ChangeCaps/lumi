@@ -19,7 +19,7 @@ struct Rotate;
 
 fn setup(mut commands: Commands) {
     commands.spawn().insert(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 10.0),
+        transform: Transform::from_xyz(0.0, 0.0, 4.0),
         ..Default::default()
     });
 
@@ -37,24 +37,7 @@ fn setup(mut commands: Commands) {
 
     commands
         .spawn()
-        .insert(MaterialBundle {
-            mesh: mesh.clone(),
-            material: StandardMaterial::default(),
-            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-            ..Default::default()
-        })
-        .insert(Rotate)
-        .with_children(|parent| {
-            parent
-                .spawn()
-                .insert(MaterialBundle {
-                    mesh: mesh.clone(),
-                    material: StandardMaterial::default(),
-                    transform: Transform::from_xyz(0.0, 2.0, 0.0),
-                    ..Default::default()
-                })
-                .insert(Rotate);
-        });
+        .insert(Primitives::open_gltf("examples/assets/delorean.glb").unwrap());
 }
 
 fn rotate_system(mut query: Query<&mut Transform, With<Rotate>>) {
