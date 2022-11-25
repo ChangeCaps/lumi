@@ -11,7 +11,7 @@ lumi-core = { path = "../lumi-core", version = "0.1.0", optional = true }
 lumi-id = { path = "../lumi-id", version = "0.1.0" }
 
 mikktspace = { version = "0.3.0", optional = true }
-shiv = { git = "https://github.com/ChangeCaps/shiv", optional = true }
+shiv = { version = "0.1.0-alpha2", optional = true }
 
 [dependencies.lumi-util]
 path = "../lumi-util"

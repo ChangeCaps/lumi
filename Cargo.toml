@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 members = ["crates/*"]
 
 [dev-dependencies]
-shiv-transform = { git = "https://github.com/ChangeCaps/shiv" }
+shiv-transform = { version = "0.1.0-alpha2" }
 
 [dependencies]
 lumi-bake = { path = "crates/lumi-bake", version = "0.1.0" }
@@ -25,15 +25,9 @@ lumi-renderer = { path = "crates/lumi-renderer", version = "0.1.0" }
 lumi-shader = { path = "crates/lumi-shader", version = "0.1.0" }
 lumi-util = { path = "crates/lumi-util", version = "0.1.0" }
 
-shiv = { git = "https://github.com/ChangeCaps/shiv", optional = true }
-shiv-app = { git = "https://github.com/ChangeCaps/shiv", optional = true }
-shiv-transform = { git = "https://github.com/ChangeCaps/shiv", optional = true }
-shiv-wgpu = { git = "https://github.com/ChangeCaps/shiv", optional = true }
-shiv-window = { git = "https://github.com/ChangeCaps/shiv", optional = true }
 tracing-log = "0.1"
 
 [features]
-default = ["material", "gltf", "shiv-plugin"]
-shiv-plugin = ["shiv", "shiv-app", "shiv-transform", "shiv-wgpu", "shiv-window"]
+default = ["material", "gltf"]
 material = ["lumi-material"]
 gltf = ["lumi-gltf"]

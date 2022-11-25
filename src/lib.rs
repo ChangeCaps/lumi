@@ -2,12 +2,6 @@
 #![doc(html_logo_url = "https://i.imgur.com/XTQGS8H.png")]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-#[cfg(feature = "shiv-plugin")]
-mod shiv_plugin;
-
-#[cfg(feature = "shiv-plugin")]
-pub use shiv_plugin::*;
-
 pub use lumi_bake as bake;
 pub use lumi_core as core;
 #[cfg(feature = "gltf")]

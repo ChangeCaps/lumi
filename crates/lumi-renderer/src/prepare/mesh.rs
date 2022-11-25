@@ -1,14 +1,14 @@
 use std::{iter, marker::PhantomData};
 
-use deref_derive::{Deref, DerefMut};
 use lumi_bounds::Aabb;
 use lumi_core::{
     BufferInitDescriptor, BufferUsages, Device, DrawCommand, SharedBuffer, SharedDevice,
 };
 use lumi_id::IdMap;
 use lumi_mesh::{Mesh, MeshId};
-
 use lumi_util::HashMap;
+
+use deref_derive::{Deref, DerefMut};
 use shiv::{
     query::{Changed, Query, Without},
     schedule::IntoSystemDescriptor,
@@ -33,6 +33,7 @@ pub struct PreparedMesh {
 
 #[derive(Default, Deref, DerefMut)]
 pub struct PreparedMeshes {
+    #[deref]
     pub meshes: IdMap<Mesh, PreparedMesh>,
     pub has_changed: bool,
 }
