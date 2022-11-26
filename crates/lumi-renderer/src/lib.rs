@@ -79,7 +79,7 @@ impl Renderer {
         }
     }
 
-    pub fn add_plugin(&mut self, plugin: impl RendererPlugin) -> &mut Self {
+    pub fn add_plugin(&mut self, plugin: &impl RendererPlugin) -> &mut Self {
         plugin.build(self);
 
         self
