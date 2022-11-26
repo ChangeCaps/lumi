@@ -17,5 +17,5 @@ lumi-shader = { path = "../lumi-shader", version = "0.1.0" }
 lumi-util = { path = "../lumi-util", version = "0.1.0" }
 
 deref-derive = "0.1"
-shiv = { version = "0.1.0-alpha.3" }
-shiv-transform = { version = "0.1.0-alpha.3" }
+shiv = { version = "0.1.0-alpha.4" }
+shiv-transform = { version = "0.1.0-alpha.4" }

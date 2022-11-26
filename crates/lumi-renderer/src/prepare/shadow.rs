@@ -262,7 +262,7 @@ pub fn extract_directional_shadow_system(
         let transform = transform.copied().unwrap_or_default();
         let mut light = light.clone();
 
-        light.direction = transform.rotation_scale.mul_vec3(light.direction);
+        light.direction = transform.matrix.mul_vec3(light.direction);
         light.direction = light.direction.normalize_or_zero();
 
         for cascade in 0..DirectionalLight::CASCADES {

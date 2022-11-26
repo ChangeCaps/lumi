@@ -76,7 +76,7 @@ pub fn extract_light_system(
         let transform = transform.copied().unwrap_or_default();
         let mut light = light.clone();
 
-        light.direction = transform.rotation_scale.mul_vec3(light.direction);
+        light.direction = transform.matrix.mul_vec3(light.direction);
         light.direction = light.direction.normalize_or_zero();
 
         let cascade = if light.shadows {
