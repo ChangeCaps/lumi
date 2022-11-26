@@ -14,6 +14,13 @@ pub trait RendererPlugin {
     fn build(&self, renderer: &mut Renderer);
 }
 
+impl<T: RendererPlugin> RendererPlugin for &T {
+    #[inline]
+    fn build(&self, renderer: &mut Renderer) {
+        T::build(*self, renderer);
+    }
+}
+
 #[derive(StageLabel)]
 pub enum ExtractStage {
     PreExtract,
