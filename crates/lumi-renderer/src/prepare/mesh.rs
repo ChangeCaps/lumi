@@ -121,7 +121,7 @@ pub fn extract_mesh_system(
     query: Extract<Query<(Entity, &Mesh), Changed<Mesh>>>,
 ) {
     for (entity, mesh) in query.iter() {
-        commands.entity(entity).insert(mesh.clone());
+        commands.get_or_spawn(entity).insert(mesh.clone());
     }
 }
 
@@ -134,7 +134,9 @@ pub fn maintain_extracted_meshes_system<T: ExtractMeshes>(
 ) {
     for entity in without_query.iter() {
         if !mesh_query.contains(entity) {
-            commands.entity(entity).insert(ExtractedMeshes::default());
+            commands
+                .get_or_spawn(entity)
+                .insert(ExtractedMeshes::default());
         }
     }
 
