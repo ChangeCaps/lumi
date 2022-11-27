@@ -79,7 +79,7 @@ pub fn extract_material_system<T: ExtractMaterials>(
         if let Some(mut material) = material_query.get_mut(entity) {
             *material = extracted;
         } else {
-            commands.entity(entity).insert(extracted);
+            commands.get_or_spawn(entity).insert(extracted);
         }
 
         if state_query.contains(entity) {
