@@ -1,7 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
 use shiv::{
-    prelude::{EventReader, EventWriter},
     query::{Query, With},
     system::{
         Commands, ReadOnlySystemParamFetch, ResState, SystemMeta, SystemParam, SystemParamFetch,
@@ -35,21 +34,15 @@ impl Extracted {
         }
     }
 
-    pub fn detection_system(
-        mut events: EventWriter<DespawnExtracted>,
+    pub fn despawn_system(
+        mut commands: Commands,
         extract_query: Extract<Query<()>>,
         extracted_query: Query<Entity, With<Extracted>>,
     ) {
         for entity in extracted_query.iter() {
             if !extract_query.contains(entity) {
-                events.send(DespawnExtracted { entity });
+                commands.entity(entity).despawn();
             }
-        }
-    }
-
-    pub fn despawn_system(mut commands: Commands, mut events: EventReader<DespawnExtracted>) {
-        for event in events.iter() {
-            commands.entity(event.entity).despawn();
         }
     }
 }
