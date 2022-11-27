@@ -210,7 +210,11 @@ pub fn draw_material_system<T: ExtractMaterials>(
 ) {
     for (extract, transform, states) in query.iter() {
         for (i, (material, mesh)) in T::mesh_iter(&extract).enumerate() {
-            let state = states.get(i).unwrap();
+            let state = if let Some(state) = states.get(i) {
+                state
+            } else {
+                continue;
+            };
 
             let key = PreparedMaterialPipelineKey::new(material, view.frame_buffer.sample_count());
             let pipeline = pipelines.get(key.id()).unwrap();
