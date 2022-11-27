@@ -111,7 +111,6 @@ impl RendererPlugin for CorePlugin {
         renderer
             .extract
             .add_system_to_stage(DefaultStage::First, Extracted::spawn_system)
-            .add_system_to_stage(DefaultStage::First, Extracted::despawn_system)
             .add_system_to_stage(ExtractStage::Extract, extract_bloom_settings_system);
 
         renderer

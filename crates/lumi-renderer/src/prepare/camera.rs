@@ -19,7 +19,7 @@ pub fn extract_camera_system(
     extract_query: Extract<Query<(Entity, &Camera), Changed<Camera>>>,
 ) {
     for (entity, camera) in extract_query.iter() {
-        commands.get_or_spawn(entity).insert(camera.clone());
+        commands.entity(entity).insert(camera.clone());
     }
 }
 
@@ -40,7 +40,7 @@ pub fn prepare_camera_system(
         if let Some(mut prepared) = prepared {
             prepared.camera.set(raw_camera);
         } else {
-            commands.get_or_spawn(entity).insert(PreparedCamera {
+            commands.entity(entity).insert(PreparedCamera {
                 camera: UniformBuffer::new(raw_camera),
             });
         }

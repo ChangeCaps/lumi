@@ -25,23 +25,17 @@ impl Extracted {
     pub fn spawn_system(
         mut commands: Commands,
         extract_query: Extract<Query<Entity>>,
-        extracted_query: Query<(), With<Extracted>>,
-    ) {
-        for entity in extract_query.iter() {
-            if !extracted_query.contains(entity) {
-                commands.get_or_spawn(entity).insert(Extracted);
-            }
-        }
-    }
-
-    pub fn despawn_system(
-        mut commands: Commands,
-        extract_query: Extract<Query<()>>,
         extracted_query: Query<Entity, With<Extracted>>,
     ) {
         for entity in extracted_query.iter() {
             if !extract_query.contains(entity) {
                 commands.entity(entity).despawn();
+            }
+        }
+
+        for entity in extract_query.iter() {
+            if !extracted_query.contains(entity) {
+                commands.get_or_spawn(entity).insert(Extracted);
             }
         }
     }

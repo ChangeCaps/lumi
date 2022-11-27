@@ -49,7 +49,7 @@ pub fn screen_space_resize_system(
         }
     } else {
         let target = ScreenSpaceTarget::new(&device, &pipeline, view.frame_buffer.size());
-        commands.get_or_spawn(view.camera).insert(target);
+        commands.entity(view.camera).insert(target);
     }
 }
 

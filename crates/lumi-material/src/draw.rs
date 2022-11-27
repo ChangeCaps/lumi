@@ -79,12 +79,12 @@ pub fn extract_material_system<T: ExtractMaterials>(
         if let Some(mut material) = material_query.get_mut(entity) {
             *material = extracted;
         } else {
-            commands.get_or_spawn(entity).insert(extracted);
+            commands.entity(entity).insert(extracted);
         }
 
         if state_query.contains(entity) {
             commands
-                .get_or_spawn(entity)
+                .entity(entity)
                 .insert(MaterialRenderStates::default());
         }
     }
@@ -210,11 +210,7 @@ pub fn draw_material_system<T: ExtractMaterials>(
 ) {
     for (extract, transform, states) in query.iter() {
         for (i, (material, mesh)) in T::mesh_iter(&extract).enumerate() {
-            let state = if let Some(state) = states.get(i) {
-                state
-            } else {
-                continue;
-            };
+            let state = states.get(i).unwrap();
 
             let key = PreparedMaterialPipelineKey::new(material, view.frame_buffer.sample_count());
             let pipeline = pipelines.get(key.id()).unwrap();
