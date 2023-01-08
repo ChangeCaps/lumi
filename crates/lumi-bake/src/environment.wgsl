@@ -48,10 +48,15 @@ fn sample_environment(texture: texture_2d<u32>, direction: vec3<f32>) -> vec4<f3
 	let base = vec2<i32>(floor(uv));
 	let offset = uv - vec2<f32>(base);
 
-	let a = vec4<f32>(textureLoad(texture, base + vec2<i32>(0, 0), 0)) / 65535.0 * 4.0;
-	let b = vec4<f32>(textureLoad(texture, base + vec2<i32>(1, 0), 0)) / 65535.0 * 4.0;
-	let c = vec4<f32>(textureLoad(texture, base + vec2<i32>(0, 1), 0)) / 65535.0 * 4.0;
-	let d = vec4<f32>(textureLoad(texture, base + vec2<i32>(1, 1), 0)) / 65535.0 * 4.0;
+	let a = (base + vec2<i32>(0, 0)) % dimensions;
+	let b = (base + vec2<i32>(1, 0)) % dimensions;
+	let c = (base + vec2<i32>(0, 1)) % dimensions;
+	let d = (base + vec2<i32>(1, 1)) % dimensions;
+
+	let a = vec4<f32>(textureLoad(texture, a, 0)) / 65535.0 * 4.0;
+	let b = vec4<f32>(textureLoad(texture, b, 0)) / 65535.0 * 4.0;
+	let c = vec4<f32>(textureLoad(texture, c, 0)) / 65535.0 * 4.0;
+	let d = vec4<f32>(textureLoad(texture, d, 0)) / 65535.0 * 4.0;
 
 	let ab = mix(a, b, offset.x);
 	let cd = mix(c, d, offset.x);
