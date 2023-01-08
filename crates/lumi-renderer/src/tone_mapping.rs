@@ -1,4 +1,4 @@
-use lumi_bind::{Bind, Bindings, BindingsLayout};
+use lumi_bind::{Bind, Binding, BindingLayout};
 use lumi_core::{
     BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, FragmentState, LoadOp,
     Operations, RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
@@ -21,7 +21,7 @@ struct ToneMappingBindings {
 }
 
 pub struct ToneMappingPipeline {
-    pub bindings_layout: BindingsLayout,
+    pub bindings_layout: BindingLayout,
     pub render_pipeline: SharedRenderPipeline,
 }
 
@@ -42,7 +42,7 @@ impl FromWorld for ToneMappingPipeline {
             .unwrap();
         vertex.rebind_with(&mut fragment).unwrap();
 
-        let bindings_layout = BindingsLayout::new()
+        let bindings_layout = BindingLayout::new()
             .with_shader(&vertex)
             .with_shader(&fragment)
             .bind::<ToneMappingBindings>();
@@ -81,7 +81,7 @@ impl FromWorld for ToneMappingPipeline {
 }
 
 pub fn tone_mapping_system(
-    mut bindings: Local<HashMap<Entity, Bindings>>,
+    mut bindings: Local<HashMap<Entity, Binding>>,
     pipeline: Local<ToneMappingPipeline>,
     mut encoder: ResMut<CommandEncoder>,
     device: Res<RenderDevice>,

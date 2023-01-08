@@ -63,7 +63,7 @@ fn load_eq(texture: texture_2d<u32>, angles: vec2<f32>) -> vec4<f32> {
 	let dimensions = textureDimensions(texture);
 	let uv = vec2<f32>(angles.x / PI / 2.0, -angles.y / PI) + 0.5;
 	var index = vec2<i32>(uv * vec2<f32>(dimensions));
-	index.x = clamp(index.x, 0, dimensions.x - 1);
+	index.x = index.x % (dimensions.x - 1);
 	return vec4<f32>(textureLoad(texture, index, 0)) / 65535.0 * 4.0;
 }
 

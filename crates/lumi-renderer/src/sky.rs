@@ -1,4 +1,4 @@
-use lumi_bind::{Bind, Bindings, BindingsLayout};
+use lumi_bind::{Bind, Binding, BindingLayout};
 use lumi_core::{
     BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, CompareFunction,
     DepthStencilState, Device, FragmentState, MultisampleState, PipelineLayout,
@@ -25,7 +25,7 @@ pub struct SkyBindings {
 pub struct SkyPipeline {
     pub vertex_shader: Shader,
     pub fragment_shader: Shader,
-    pub bindings_layout: BindingsLayout,
+    pub bindings_layout: BindingLayout,
     pub pipeline_layout: PipelineLayout,
     pub render_pipeline: SharedRenderPipeline,
     pub sample_count: u32,
@@ -46,7 +46,7 @@ impl FromWorld for SkyPipeline {
         vertex_shader.compile(device).unwrap();
         fragment_shader.compile(device).unwrap();
 
-        let bindings_layout = BindingsLayout::new()
+        let bindings_layout = BindingLayout::new()
             .with_shader(&vertex_shader)
             .with_shader(&fragment_shader)
             .bind::<PreparedCamera>()
@@ -130,7 +130,7 @@ impl SkyPipeline {
 }
 
 pub fn sky_render_system(
-    mut bindings: Local<HashMap<Entity, Bindings>>,
+    mut bindings: Local<HashMap<Entity, Binding>>,
     mut pipeline: Local<SkyPipeline>,
     mut encoder: ResMut<CommandEncoder>,
     device: Res<RenderDevice>,

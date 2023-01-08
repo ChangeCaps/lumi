@@ -1,7 +1,7 @@
 use std::{iter, ops::Deref};
 
 use deref_derive::{Deref, DerefMut};
-use lumi_bind::Bindings;
+use lumi_bind::Binding;
 use lumi_id::Id;
 use lumi_mesh::Mesh;
 use lumi_renderer::{
@@ -58,7 +58,7 @@ impl<T: Material> ExtractMaterials for T {
 #[derive(Component, Default, Deref, DerefMut)]
 pub struct MaterialRenderState {
     #[deref]
-    pub bindings: HashMap<Entity, Bindings>,
+    pub bindings: HashMap<Entity, Binding>,
     pub pipeline: Id<PreparedMaterialPipeline>,
 }
 

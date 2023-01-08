@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use lumi_bind::{Bind, Bindings, BindingsLayout};
+use lumi_bind::{Bind, Binding, BindingLayout};
 use lumi_core::{
     BlendComponent, BlendFactor, BlendOperation, BlendState, Color, ColorTargetState, ColorWrites,
     CommandEncoder, Device, Extent3d, FragmentState, LoadOp, Operations, PipelineLayoutDescriptor,
@@ -19,13 +19,13 @@ pub struct MipChain {
     pub view: SharedTextureView,
     pub mip_level_count: Option<u32>,
     pub views: Vec<SharedTextureView>,
-    pub bindings: Vec<Bindings>,
+    pub bindings: Vec<Binding>,
 }
 
 impl MipChain {
     pub fn new(
         device: &Device,
-        layout: &BindingsLayout,
+        layout: &BindingLayout,
         width: u32,
         height: u32,
         mip_level_count: Option<u32>,
@@ -241,8 +241,8 @@ pub struct UpsampleBindings<'a> {
 }
 
 pub struct MipChainPipeline {
-    pub down_layout: BindingsLayout,
-    pub up_layout: BindingsLayout,
+    pub down_layout: BindingLayout,
+    pub up_layout: BindingLayout,
     pub downsample_pipeline: RenderPipeline,
     pub upsample_pipeline: RenderPipeline,
 }
@@ -264,12 +264,12 @@ impl FromWorld for MipChainPipeline {
             .unwrap();
         vertex.rebind_with(&mut fragment).unwrap();
 
-        let down_layout = BindingsLayout::new()
+        let down_layout = BindingLayout::new()
             .with_shader(&vertex)
             .with_shader(&fragment)
             .bind::<DownsampleBindings>();
 
-        let up_layout = BindingsLayout::new()
+        let up_layout = BindingLayout::new()
             .with_shader(&vertex)
             .with_shader(&fragment)
             .bind::<UpsampleBindings>();

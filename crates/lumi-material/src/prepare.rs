@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use deref_derive::{Deref, DerefMut};
-use lumi_bind::BindingsLayout;
+use lumi_bind::BindingLayout;
 use lumi_core::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
     Device, FragmentState, MultisampleState, PipelineLayout, PrimitiveState,
@@ -72,7 +72,7 @@ impl PreparedMaterialPipelines {
 
 #[derive(Debug)]
 pub struct PreparedMaterialPipeline {
-    pub bindings_layout: BindingsLayout,
+    pub bindings_layout: BindingLayout,
     pub material_pipeline: MaterialPipeline,
     pub pipeline_layout: PipelineLayout,
     pub prepass_pipeline: SharedRenderPipeline,
@@ -104,7 +104,7 @@ impl PreparedMaterialPipeline {
 
         material_pipeline.rebind();
 
-        let bindings_layout = BindingsLayout::new()
+        let bindings_layout = BindingLayout::new()
             .with_shader(&material_pipeline.vertex_shader)
             .with_shader(&material_pipeline.fragment_shader)
             .bind::<PreparedCamera>()

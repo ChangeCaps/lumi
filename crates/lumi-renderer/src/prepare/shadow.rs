@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use lumi_bind::{Bind, Bindings, BindingsLayout};
+use lumi_bind::{Bind, Binding, BindingLayout};
 use lumi_bounds::CascadeFrustum;
 use lumi_core::{
     CommandEncoder, Device, Extent3d, IndexFormat, LoadOp, Operations, Queue,
@@ -124,7 +124,7 @@ pub struct ShadowCasterBindings {
 }
 
 pub struct ShadowPipeline {
-    pub bindings_layout: BindingsLayout,
+    pub bindings_layout: BindingLayout,
     pub render_pipeline: SharedRenderPipeline,
 }
 
@@ -140,7 +140,7 @@ impl FromWorld for ShadowPipeline {
             .unwrap();
         vertex_shader.rebind().unwrap();
 
-        let bindings_layout = BindingsLayout::new()
+        let bindings_layout = BindingLayout::new()
             .with_shader(&vertex_shader)
             .bind::<PreparedTransform>()
             .bind::<ShadowCasterBindings>();
@@ -222,7 +222,7 @@ impl DerefMut for ShadowTargets {
 
 #[derive(Component, Default)]
 pub struct ShadowRenderState {
-    pub bindings: IdMap<ShadowTarget, Bindings>,
+    pub bindings: IdMap<ShadowTarget, Binding>,
     pub transform: Mat4,
 }
 
